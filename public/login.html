@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Depo — вход</title>
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<meta name="theme-color" content="#0f1011">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main class="login">
+  <form id="f" autocomplete="on">
+    <div class="brand">
+      <span class="m"><svg width="32" height="32" viewBox="0 0 32 32">
+        <path d="M4.6 27.4V15.6a11.4 11.4 0 0 1 22.8 0v11.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M10.9 27.4v-6.9a5.1 5.1 0 0 1 10.2 0v6.9" fill="currentColor"/></svg></span>
+      <b>Depo</b><span id="host">localhost</span>
+    </div>
+    <label>Логин<input id="login" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+    <label>Пароль<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="err" role="alert"></p>
+    <button type="submit" id="go">Войти</button>
+    <p class="foot">частный сервер · защищённый доступ</p>
+    <p class="foot" id="tls-hint" hidden>Для микрофона нужен HTTPS: <a id="tls-link" style="color:var(--accent)">открыть по https</a> · <a href="/ca.crt" style="color:var(--accent)">сертификат для телефона</a></p>
+  </form>
+</main>
+<script>
+const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
+document.getElementById('host').textContent = location.hostname;
+document.getElementById('login').focus();
+if (location.protocol === 'http:') {
+  const h = document.getElementById('tls-hint'); h.hidden = false;
+  document.getElementById('tls-link').href = `https://${location.hostname}:${(+location.port || 80) + 1}/`;
+}
+f.addEventListener('submit', async e => {
+  e.preventDefault();
+  err.textContent = ''; go.disabled = true; go.textContent = 'Проверяю…';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ login: login.value, password: password.value }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'Не вышло войти.');
+    location.href = '/';
+  } catch (e) {
+    err.textContent = e.message;
+    go.disabled = false; go.textContent = 'Войти';
+    password.value = ''; password.focus();
+  }
+});
+</script>
+</body>
+</html>

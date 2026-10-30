@@ -1,0 +1,23 @@
+[Unit]
+Description=Depo self-hosted agent hub
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__DEPO_USER__
+WorkingDirectory=__DEPO_ROOT__
+Environment=HOME=__DEPO_HOME__
+Environment=NODE_USE_ENV_PROXY=1
+ExecStart=__DEPO_NODE__ --env-file-if-exists=__DEPO_ROOT__/.env __DEPO_ROOT__/server.mjs
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

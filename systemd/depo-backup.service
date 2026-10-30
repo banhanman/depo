@@ -1,0 +1,11 @@
+[Unit]
+Description=Depo backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=__DEPO_USER__
+WorkingDirectory=__DEPO_ROOT__
+Environment=HOME=__DEPO_HOME__
+EnvironmentFile=-__DEPO_ROOT__/.env
+ExecStart=__DEPO_NODE__ __DEPO_ROOT__/scripts/backup.mjs

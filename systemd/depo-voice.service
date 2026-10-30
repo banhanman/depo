@@ -1,0 +1,20 @@
+[Unit]
+Description=Depo local speech recognition
+After=network.target
+
+[Service]
+Type=simple
+User=__DEPO_USER__
+WorkingDirectory=__DEPO_ROOT__/voice
+EnvironmentFile=-__DEPO_ROOT__/.env
+Environment=OMP_NUM_THREADS=4
+Environment=DEPO_WHISPER_MODEL=small
+ExecStart=__DEPO_ROOT__/voice/venv/bin/python __DEPO_ROOT__/voice/server.py
+Restart=always
+RestartSec=5
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

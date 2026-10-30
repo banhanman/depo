@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800" viewBox="0 0 1600 800" role="img" aria-labelledby="title desc">
+  <title id="title">Depo — ваши агенты на вашем сервере</title>
+  <desc id="desc">Самостоятельный веб-хаб для Claude Code, Codex, Gemini и Kimi Code</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#151619"/>
+      <stop offset="0.52" stop-color="#0e0f11"/>
+      <stop offset="1" stop-color="#11100d"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0c96e"/>
+      <stop offset="1" stop-color="#c88e34"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.25" cy="0.35" r="0.72">
+      <stop offset="0" stop-color="#d9a94c" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#d9a94c" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity="0.025"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="800" fill="url(#bg)"/>
+  <rect width="1600" height="800" fill="url(#grid)"/>
+  <rect width="1600" height="800" fill="url(#glow)"/>
+  <circle cx="1490" cy="68" r="300" fill="#d9a94c" opacity="0.025"/>
+  <g transform="translate(96 88)">
+    <rect width="96" height="96" rx="27" fill="url(#gold)"/>
+    <path d="M24 72V43a24 24 0 0 1 48 0v29" fill="none" stroke="#17120a" stroke-width="6" stroke-linecap="round"/>
+    <path d="M37 72V53a11 11 0 0 1 22 0v19" fill="#17120a"/>
+  </g>
+  <text x="96" y="286" fill="#f5f3ee" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="112" font-weight="700" letter-spacing="-4">Depo</text>
+  <text x="102" y="348" fill="#d9a94c" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="25" font-weight="600" letter-spacing="4">YOUR AGENTS. YOUR SERVER.</text>
+  <text x="100" y="423" fill="#c8c7c4" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="31">Личный хаб coding-агентов</text>
+  <text x="100" y="467" fill="#85868b" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="25">Проекты, чаты, файлы и лимиты — в одном окне.</text>
+  <g transform="translate(100 532)" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="22">
+    <g>
+      <rect width="206" height="58" rx="29" fill="#1c1d20" stroke="#343337"/>
+      <circle cx="31" cy="29" r="8" fill="#d97757"/>
+      <text x="51" y="37" fill="#e7e5df">Claude Code</text>
+    </g>
+    <g transform="translate(222 0)">
+      <rect width="148" height="58" rx="29" fill="#1c1d20" stroke="#343337"/>
+      <circle cx="31" cy="29" r="8" fill="#d7d8da"/>
+      <text x="51" y="37" fill="#e7e5df">Codex</text>
+    </g>
+    <g transform="translate(386 0)">
+      <rect width="156" height="58" rx="29" fill="#1c1d20" stroke="#343337"/>
+      <circle cx="31" cy="29" r="8" fill="#7fa3d1"/>
+      <text x="51" y="37" fill="#e7e5df">Gemini</text>
+    </g>
+  </g>
+  <g transform="translate(100 626)" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="20" fill="#76777c">
+    <text>SELF-HOSTED</text>
+    <circle cx="157" cy="-7" r="3" fill="#d9a94c"/>
+    <text x="178">NODE.JS</text>
+    <circle cx="288" cy="-7" r="3" fill="#d9a94c"/>
+    <text x="309">RASPBERRY PI · VPS · LINUX</text>
+  </g>
+  <g transform="translate(866 112) rotate(2 315 278)" filter="url(#shadow)">
+    <rect width="626" height="558" rx="25" fill="#151618" stroke="#38383b"/>
+    <path d="M0 58H626" stroke="#303034"/>
+    <circle cx="29" cy="29" r="5" fill="#d9705c"/>
+    <circle cx="49" cy="29" r="5" fill="#d9a94c"/>
+    <circle cx="69" cy="29" r="5" fill="#6fb98a"/>
+    <text x="278" y="36" fill="#77787e" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="15">depo / workspace</text>
+    <rect x="20" y="78" width="164" height="456" rx="15" fill="#111214"/>
+    <rect x="36" y="100" width="42" height="42" rx="12" fill="#d9a94c"/>
+    <path d="M47 133v-15a7 7 0 0 1 14 0v15" fill="none" stroke="#17120a" stroke-width="3" stroke-linecap="round"/>
+    <text x="91" y="119" fill="#eceae5" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="16" font-weight="600">Projects</text>
+    <text x="91" y="138" fill="#65666b" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="12">4 active</text>
+    <rect x="32" y="166" width="140" height="48" rx="10" fill="#232428"/>
+    <rect x="44" y="179" width="22" height="22" rx="6" fill="#d9a94c" opacity="0.9"/>
+    <text x="77" y="195" fill="#d9d7d2" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">Website</text>
+    <rect x="44" y="231" width="22" height="22" rx="6" fill="#33353a"/>
+    <text x="77" y="247" fill="#828388" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">API</text>
+    <rect x="44" y="283" width="22" height="22" rx="6" fill="#33353a"/>
+    <text x="77" y="299" fill="#828388" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">Mobile</text>
+    <rect x="44" y="335" width="22" height="22" rx="6" fill="#33353a"/>
+    <text x="77" y="351" fill="#828388" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">Server</text>
+    <rect x="206" y="86" width="396" height="48" rx="12" fill="#1b1c1f"/>
+    <circle cx="230" cy="110" r="7" fill="#6fb98a"/>
+    <text x="250" y="117" fill="#e6e4df" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600">Build the release dashboard</text>
+    <rect x="228" y="165" width="290" height="63" rx="14" fill="#29251c"/>
+    <text x="247" y="191" fill="#d8d4ca" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="15">Review the changes and run</text>
+    <text x="247" y="214" fill="#d8d4ca" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="15">the complete test suite.</text>
+    <rect x="206" y="255" width="370" height="138" rx="14" fill="#1c1d20"/>
+    <circle cx="229" cy="279" r="9" fill="#d97757"/>
+    <text x="249" y="285" fill="#b8b6b1" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">Claude Code</text>
+    <text x="226" y="319" fill="#dedcd7" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="15">All checks passed. The dashboard</text>
+    <text x="226" y="343" fill="#dedcd7" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="15">is ready for your review.</text>
+    <rect x="226" y="359" width="97" height="20" rx="6" fill="#26332b"/>
+    <text x="240" y="374" fill="#83c69b" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="11">32 tests</text>
+    <rect x="206" y="430" width="396" height="80" rx="16" fill="#202125" stroke="#393a3e"/>
+    <text x="228" y="462" fill="#73747a" font-family="Inter,DejaVu Sans,Arial,sans-serif" font-size="14">Ask your agents…</text>
+    <rect x="539" y="446" width="46" height="46" rx="13" fill="url(#gold)"/>
+    <path d="M556 480l8-19 8 19m-13-7h10" fill="none" stroke="#17120a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Depo</title>
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f1011">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app" id="app" data-side="1">
+
+  <nav class="rail" aria-label="Проекты">
+    <span class="logo" title="Depo"><svg width="20" height="20" viewBox="0 0 32 32">
+      <path d="M5 27.2V15.8a11 11 0 0 1 22 0v11.4" fill="none" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/>
+      <path d="M10.4 27.2v-7.1a5.6 5.6 0 0 1 11.2 0v7.1" fill="currentColor"/></svg></span>
+    <div class="prail" id="rail"></div>
+    <button class="rbtn" id="btn-newproject" aria-label="Новый проект" title="Новый проект">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <div class="sp"></div>
+    <div class="rsep"></div>
+    <button class="rbtn" id="btn-side" aria-label="Свернуть панель" title="Свернуть панель  [">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg></button>
+    <button class="rbtn" id="btn-board" aria-label="Доска задач" title="Доска задач">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="4" width="6" height="16" rx="1.5"/><rect x="11" y="4" width="6" height="10" rx="1.5"/><rect x="19" y="4" width="2" height="7" rx="1"/></svg></button>
+    <button class="rbtn" id="btn-settings" aria-label="Настройки" title="Настройки"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </nav>
+
+  <div class="fly" id="fly" hidden role="dialog" aria-label="Чаты проекта"></div>
+
+  <aside class="side" id="side">
+    <div class="shead">
+      <div class="c"><h1 id="pname">—</h1><span class="p" id="ppath"></span></div>
+      <button class="sbtn" id="btn-pmenu" aria-label="Действия проекта"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>
+    </div>
+    <button class="add" id="btn-newchat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Новый чат</button>
+    <div class="clist" id="clist"></div>
+    <div class="sfoot">
+      <button class="ucard" id="btn-user"><span class="av owner"><span id="uav">h</span><svg class="crown" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18l-1.5-9-4.5 4-3-7-3 7-4.5-4z"/><rect x="3" y="19" width="18" height="2.4" rx="1"/></svg></span>
+        <span class="c"><b id="uname">—</b><span id="umeta">claude · codex</span></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--faint)"><path d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <button class="exp" id="btn-exp" aria-label="Развернуть панель"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg></button>
+      <div class="ttl"><h2 id="ctitle">Depo</h2><span class="sub" id="csub"></span></div>
+      <button class="chip" id="chip-state" hidden><span class="led"></span><span id="state-text"></span></button>
+      <button class="chip gauge" id="chip-gauge" aria-expanded="false" hidden title="Лимиты и контекст"></button>
+      <button class="chip" id="chip-files" hidden title="Файлы проекта"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg><span class="cl">Файлы</span></button>
+      <button class="chip" id="chip-split" aria-pressed="false" hidden title="Второй чат рядом"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg><span class="cl">Рядом</span></button>
+    </header>
+
+    <div class="pop" id="pop-ctx" hidden role="dialog" aria-label="Контекст и лимиты"></div>
+
+    <div class="feed" id="feed" hidden><div class="fw" id="fw"></div></div>
+
+    <div class="blank" id="blank">
+      <div class="in">
+        <span class="m"><svg width="46" height="46" viewBox="0 0 32 32">
+          <path d="M4.6 27.4V15.6a11.4 11.4 0 0 1 22.8 0v11.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M10.9 27.4v-6.9a5.1 5.1 0 0 1 10.2 0v6.9" fill="currentColor"/></svg></span>
+        <b id="blank-title">Выбери проект</b>
+        <p id="blank-text">Проект — это папка на сервере. Внутри проекта заводятся чаты.</p>
+        <button id="blank-btn" hidden></button>
+      </div>
+    </div>
+
+    <aside class="pane2" id="pane2" hidden aria-label="Второй чат">
+      <div class="p2head">
+        <button class="p2pick" id="p2-pick">выбрать чат</button>
+        <span class="p2state" id="p2-state"></span>
+        <button class="sbtn" id="p2-close" aria-label="Закрыть второй чат"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="p2feed" id="p2-feed"></div>
+      <div class="p2cmp"><textarea id="p2-inp" rows="1" placeholder="Ответить…"></textarea>
+        <button class="snd" id="p2-send" aria-label="Отправить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
+    </aside>
+
+    <div class="cmp" id="cmp" hidden>
+      <div class="cb" id="cb">
+        <div class="cbody">
+        <label class="sr" for="inp">Сообщение</label>
+        <textarea id="inp" placeholder="Что сделать в этом проекте?" rows="1"></textarea>
+        <div class="atts" id="atts" hidden></div>
+        <div class="cbar">
+          <button class="rnd" id="btn-attach" aria-label="Прикрепить файл" title="Прикрепить файл или скриншот">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8L13 3.9a3.7 3.7 0 0 1 5.2 5.2L9.9 17.4a1.8 1.8 0 0 1-2.6-2.6L15 7.1"/></svg></button>
+          <input type="file" id="file-inp" multiple hidden>
+          <button class="mt agbtn" id="btn-agent" aria-label="Выбрать агента"></button>
+          <button class="mt" id="btn-model">—</button>
+          <button class="mt" id="btn-effort">—</button>
+          <button class="mt" id="btn-perm">acceptEdits</button>
+          <button class="ctxdot" id="btn-ctxdot" hidden aria-label="Заполнение контекста">
+            <span class="ring"></span><span class="pc"></span></button>
+          <div class="grow"></div>
+          <button class="rnd gem" id="btn-gemini" hidden aria-label="Спросить собеседника" title="Спросить собеседника про этот чат">
+            <i class="pico" style="--src:url(/icons/providers/gemini.svg)"></i></button>
+          <button class="rnd" id="btn-mic" aria-pressed="false" aria-label="Голосовой ввод">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
+          <button class="snd" id="btn-send" aria-label="Отправить">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
+        </div>
+      </div>
+      <div class="dictate" id="dictate" hidden>
+        <canvas id="wave" width="300" height="28" aria-hidden="true"></canvas>
+        <span class="dtext" id="dtext">слушаю…</span>
+        <span class="dtime" id="dtime">0:00</span>
+        <button class="btn" id="d-cancel">Отмена</button>
+        <button class="btn primary" id="d-done">Готово</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="liveov" id="live" hidden>
+  <div class="box">
+    <div class="hd"><b>Разговор с собеседником</b>
+      <span class="st" id="live-st">соединяю…</span></div>
+    <button class="ball" id="live-ball" aria-label="Микрофон"><span class="wavey"><i></i><i></i><i></i><i></i><i></i></span></button>
+    <div class="cap" id="live-cap">Говори — он слышит. Файлы не трогает, только разговор.</div>
+    <div class="row">
+      <input class="fld" id="live-text" placeholder="или напиши словами" autocomplete="off">
+      <button class="btn" id="live-send">Сказать</button>
+      <button class="btn danger" id="live-stop">Закончить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
