@@ -24,3 +24,21 @@ test('каталог Kimi берёт актуальные модели и окн
 test('пустой каталог Kimi не подменяется устаревшими моделями', () => {
   assert.throws(() => parseKimiCatalog({ models: {} }), /пустой каталог/);
 });
+
+test('каталог Kimi: «По умолчанию» наследует раздумья и контекст модели по умолчанию', () => {
+  const catalog = parseKimiCatalog(JSON.stringify({
+    models: {
+      'kimi-code/k3': { model: 'k3', displayName: 'K3', maxContextSize: 1048576, supportEfforts: ['low', 'high'], defaultEffort: 'high' },
+      'kimi-code/k5': { model: 'k5', displayName: 'K5', maxContextSize: 131072, supportEfforts: ['medium'] },
+    },
+  }), 'kimi-code/k3');
+  assert.equal(catalog.defaultModel, 'kimi-code/k3');
+  const def = catalog.items[0];
+  assert.equal(def.name, 'По умолчанию');
+  assert.deepEqual(def.efforts.map(e => e.id), ['low', 'high']);
+  assert.equal(def.effort, 'high');
+  assert.equal(def.contextWindow, 1048576);
+  assert.match(def.description, /K3/);
+  // у обычного пункта каталога раздумья тоже есть
+  assert.deepEqual(catalog.items[2].efforts.map(e => e.id), ['medium']);
+});

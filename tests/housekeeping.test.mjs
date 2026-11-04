@@ -1,0 +1,31 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { open, helpers } from '../lib/db.mjs';
+import * as hk from '../lib/housekeeping.mjs';
+
+test('уборка: старый журнал и длинные старые выводы команд — да, реплики — никогда', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'depo-hk-'));
+  const db = open(dir), h = helpers(db);
+  const now = Date.now(), day = 24 * 3600e3;
+  for (let i = 0; i < 5; i++) h.run('INSERT INTO log(ts,level,scope,text) VALUES(?,?,?,?)', now - 40 * day, 'info', 'x', 'старое');
+  h.run('INSERT INTO log(ts,level,scope,text) VALUES(?,?,?,?)', now, 'info', 'x', 'свежее');
+  h.run('INSERT INTO projects(name,path,glyph,created_at) VALUES(?,?,?,?)', 'P', dir, 'P', 1);
+  h.run("INSERT INTO chats(id,project_id,provider,created_at,updated_at) VALUES('c',1,'claude',1,1)");
+  const big = 'x'.repeat(5000);
+  h.run("INSERT INTO messages(chat_id,role,kind,text,ts) VALUES('c','tool','tool_result',?,?)", big, now - 90 * day);
+  h.run("INSERT INTO messages(chat_id,role,kind,text,ts) VALUES('c','tool','tool_result',?,?)", big, now - day);
+  h.run("INSERT INTO messages(chat_id,role,kind,text,ts) VALUES('c','assistant','text',?,?)", big, now - 90 * day);
+  const r = hk.prune(h, { now });
+  assert.equal(r.log, 5);
+  assert.equal(r.tools, 1);
+  const lens = h.all('SELECT kind, ts, length(text) n FROM messages ORDER BY id').map(x => x.n);
+  assert.ok(lens[0] < 1100, 'старый вывод команды сокращён');
+  assert.equal(lens[1], 5000, 'свежий вывод не тронут');
+  assert.equal(lens[2], 5000, 'ответ агента не тронут никогда');
+  assert.deepEqual(hk.prune(h, { now }), { log: 0, tools: 0 }, 'повторная уборка ничего не портит');
+  assert.ok(hk.usage(h, dir).db > 0);
+  db.close(); fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -1,6 +1,6 @@
 {
   "name": "depo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-hosted web hub for Claude Code, Codex, Gemini and Kimi on your own server",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
     "start": "node --env-file-if-exists=.env server.mjs",
     "setup": "node scripts/setup.mjs",
     "backup": "node scripts/backup.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "check:ui": "node scripts/ui-check.mjs"
   }
 }

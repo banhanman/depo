@@ -1,0 +1,40 @@
+# Проводник для Depo: клиент NetBird + два пересыльщика. Остальные сервисы сервера не затрагивает.
+# /opt/depo-relay/docker-compose.yml; рядом .env с NB_SETUP_KEY=...; запуск: docker compose up -d
+# bind — шлюз docker-сети, где живёт обратный прокси (docker network inspect <сеть> → Gateway).
+services:
+  netbird:
+    image: netbirdio/netbird:latest
+    container_name: depo-relay-netbird
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, SYS_ADMIN, SYS_RESOURCE]
+    env_file: .env
+    environment:
+      - NB_HOSTNAME=depo-relay
+    volumes:
+      - netbird-client:/etc/netbird
+  forward-web:
+    image: alpine/socat:latest
+    container_name: depo-relay-forward-web
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [netbird]
+    entrypoint: ["sh", "-c"]
+    # порт открывается, только когда Depo умеет выключатель доступа (401 на /api/remote)
+    command:
+      - |
+        until wget -q -S -O /dev/null http://100.x.y.z:4620/api/remote 2>&1 | grep -qE " (401|403) "; do sleep 20; done
+        exec socat TCP-LISTEN:14620,bind=172.18.0.1,fork,reuseaddr TCP:100.x.y.z:4620,connect-timeout=10
+  forward-ip:
+    image: alpine/socat:latest
+    container_name: depo-relay-forward-ip
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [netbird]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        until wget -q -S -O /dev/null http://100.x.y.z:4620/api/remote 2>&1 | grep -qE " (401|403) "; do sleep 20; done
+        exec socat TCP-LISTEN:4621,fork,reuseaddr TCP:100.x.y.z:4621,connect-timeout=10
+volumes:
+  netbird-client:

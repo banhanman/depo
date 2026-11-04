@@ -41,13 +41,13 @@ test('за пределы дома проект не пускают', () => {
   assert.equal(P.checkPath('/etc').ok, false);
   assert.equal(P.checkPath('~/.claude').ok, false);
   assert.equal(P.checkPath('~/.ssh/keys').ok, false);
-  assert.ok(P.checkPath('~/demo-project').ok);
-  assert.equal(P.checkPath('~/demo-project').abs, path.join(os.homedir(), 'demo-project'));
+  assert.ok(P.checkPath('~/my-project').ok);
+  assert.equal(P.checkPath('~/my-project').abs, path.join(os.homedir(), 'my-project'));
 });
 
 test('значок проекта не повторяется', () => {
-  assert.equal(P.glyphFor('Demo Project'), 'DP');
-  assert.notEqual(P.glyphFor('Demo Project', ['DP']), 'DP');
+  assert.equal(P.glyphFor('Space Port'), 'SP');
+  assert.notEqual(P.glyphFor('Space Port', ['SP']), 'SP');
   assert.equal(P.glyphFor('Депо'), 'ДЕ');
 });
 
@@ -60,7 +60,7 @@ test('лимиты разбираются из ответа /usage', () => {
   assert.equal(u.limits.length, 2);
   assert.equal(u.limits[0].pct, 11);
   assert.equal(u.limits[0].label, 'Сессия · 5 ч');
-  assert.match(u.limits[1].resets, /2 нояб\.?, 00:59/);
+  assert.match(u.limits[1].resets, /2 нояб\.?, 00:59/);   // даты из /usage приводим к русскому виду
   assert.equal(u.today.requests, 1105);
 });
 
@@ -95,7 +95,7 @@ test('передача между провайдерами собирает за
   add('assistant', 'text', 'Поправил минимум в гриде');
 
   const ho = handoff.build(h, { id: cid }, 'claude', 'codex');
-  assert.deepEqual(ho.files, ['src/a.css']);
+  assert.deepEqual(ho.files, ['src/a.css']);          // Read не считается правкой
   assert.match(ho.text, /Почини вёрстку каталога/);
   assert.match(ho.text, /от Claude Code к Codex/);
   assert.match(ho.text, /Поправил минимум/);
@@ -109,7 +109,7 @@ test('пустой чат передавать нечего', () => {
 
 test('сессии Claude: путь → папка, разбор jsonl с позиции', async () => {
   const { slugOf, readSession } = await import('../lib/sessions.mjs');
-  assert.equal(slugOf('/home/owner/demo-project'), '-home-owner-demo-project');
+  assert.equal(slugOf('/home/owner/my-project'), '-home-owner-my-project');
   assert.equal(slugOf('/home/owner/a/.worktrees/T1'), '-home-owner-a--worktrees-T1');
   const f = path.join(tmp, 's.jsonl');
   const lines = [
