@@ -2,23 +2,39 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>Depo</title>
 <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b0c0d">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#0f1011">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<!-- заставка при запуске приложения с телефона: логотип со свечением, пока грузится состояние -->
+<div class="splash" id="splash" aria-hidden="true" hidden>
+  <div class="sp-stage"><div class="sp-glow"></div><div class="sp-ring"></div>
+    <img class="sp-logo" src="/icons/icon-512.png" alt="" width="176" height="176"></div>
+  <div class="sp-name">Depo</div>
+</div>
+<script>
+  // показываем только при холодном запуске установленного приложения (или телефона), не на каждой перезагрузке
+  (function () {
+    try {
+      var app = matchMedia('(display-mode: standalone)').matches || navigator.standalone || innerWidth <= 760;
+      if (app && !sessionStorage.getItem('depo.splash')) {
+        sessionStorage.setItem('depo.splash', '1');
+        var s = document.getElementById('splash'); s.hidden = false; window.__splashAt = Date.now();
+      }
+    } catch (e) { }
+  })();
+</script>
 <div class="app" id="app" data-side="1">
 
   <nav class="rail" aria-label="Проекты">
-    <span class="logo" title="Depo"><svg width="20" height="20" viewBox="0 0 32 32">
-      <path d="M5 27.2V15.8a11 11 0 0 1 22 0v11.4" fill="none" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/>
-      <path d="M10.4 27.2v-7.1a5.6 5.6 0 0 1 11.2 0v7.1" fill="currentColor"/></svg></span>
+    <button class="rbtn logo" id="btn-home" title="Главная" aria-label="Главная"><img src="/icons/icon-180.png" alt="" width="30" height="30"></button>
     <div class="prail" id="rail"></div>
     <button class="rbtn" id="btn-newproject" aria-label="Новый проект" title="Новый проект">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -39,6 +55,7 @@
       <button class="sbtn" id="btn-pmenu" aria-label="Действия проекта"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button>
     </div>
     <button class="add" id="btn-newchat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Новый чат</button>
+    <label class="csearch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg><input id="csearch" type="search" placeholder="Поиск по чатам" aria-label="Поиск по чатам всех проектов" autocomplete="off" enterkeyhint="search"></label>
     <div class="clist" id="clist"></div>
     <div class="sfoot">
       <button class="ucard" id="btn-user"><span class="av owner"><span id="uav">h</span><svg class="crown" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18l-1.5-9-4.5 4-3-7-3 7-4.5-4z"/><rect x="3" y="19" width="18" height="2.4" rx="1"/></svg></span>
@@ -48,25 +65,44 @@
     </div>
   </aside>
 
+  <div class="dscrim" id="dscrim" aria-hidden="true"></div>
+
   <main class="main">
     <header class="top">
-      <button class="exp" id="btn-exp" aria-label="Развернуть панель"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg></button>
+      <button class="exp" id="btn-exp" aria-label="Развернуть панель"><svg class="pn" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg><svg class="bk" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <div class="ttl"><h2 id="ctitle">Depo</h2><span class="sub" id="csub"></span></div>
+      <button class="runpill" id="runpill" hidden title="Другие задачи, которые сейчас работают"></button>
       <button class="chip" id="chip-state" hidden><span class="led"></span><span id="state-text"></span></button>
       <button class="chip gauge" id="chip-gauge" aria-expanded="false" hidden title="Лимиты и контекст"></button>
       <button class="chip" id="chip-files" hidden title="Файлы проекта"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg><span class="cl">Файлы</span></button>
+      <button class="chip asstbtn" id="btn-asst" title="Ассистент — поговорить о проектах  Ctrl+J"><span class="awave"><i></i><i></i><i></i><i></i><i></i></span><span>Ассистент</span></button>
       <button class="chip" id="chip-split" aria-pressed="false" hidden title="Второй чат рядом"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg><span class="cl">Рядом</span></button>
     </header>
 
     <div class="pop" id="pop-ctx" hidden role="dialog" aria-label="Контекст и лимиты"></div>
 
     <div class="feed" id="feed" hidden><div class="fw" id="fw"></div></div>
+    <button id="to-bottom" hidden aria-label="К последнему сообщению"></button>
+
+    <!-- телефон: проекты и чаты — отдельные экраны на всю высоту, без выезжающей панели -->
+    <section class="mscreen" id="mscreen" hidden aria-live="polite"></section>
+
+    <section class="dash" id="dash" hidden aria-label="Главная">
+      <div class="dwrap">
+        <div class="dsec" id="dsec-active"><h3>Активные задачи</h3><div id="dash-active"></div></div>
+        <div class="dsec"><h3>Лимиты</h3><div class="dgrid" id="dash-meters"></div></div>
+        <div class="dsec"><h3>Проекты<button class="dact" id="dash-allproj">Все проекты</button></h3><div class="dgrid" id="dash-projects"></div></div>
+        <div class="dgrid drow2">
+          <div class="dsec"><h3>Статистика</h3><div class="dfill" id="dash-stats"></div></div>
+          <div class="dsec"><h3>Сервисы</h3><div class="dfill" id="dash-providers"></div></div>
+          <div class="dsec dwide"><h3>Сервер</h3><div class="dfill" id="dash-server"></div></div>
+        </div>
+      </div>
+    </section>
 
     <div class="blank" id="blank">
       <div class="in">
-        <span class="m"><svg width="46" height="46" viewBox="0 0 32 32">
-          <path d="M4.6 27.4V15.6a11.4 11.4 0 0 1 22.8 0v11.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          <path d="M10.9 27.4v-6.9a5.1 5.1 0 0 1 10.2 0v6.9" fill="currentColor"/></svg></span>
+        <span class="m"><img src="/icons/icon-180.png" alt="" width="64" height="64"></span>
         <b id="blank-title">Выбери проект</b>
         <p id="blank-text">Проект — это папка на сервере. Внутри проекта заводятся чаты.</p>
         <button id="blank-btn" hidden></button>
@@ -74,39 +110,54 @@
     </div>
 
     <aside class="pane2" id="pane2" hidden aria-label="Второй чат">
+      <div class="p2-resize" id="p2-resize" aria-hidden="true"></div>
       <div class="p2head">
         <button class="p2pick" id="p2-pick">выбрать чат</button>
         <span class="p2state" id="p2-state"></span>
         <button class="sbtn" id="p2-close" aria-label="Закрыть второй чат"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="p2feed" id="p2-feed"></div>
+      <div class="p2atts" id="p2-atts" hidden></div>
+      <div class="p2tools"><button class="mt" id="p2-agent">—</button><button class="mt" id="p2-model">—</button><button class="mt" id="p2-effort">—</button><button class="rnd" id="p2-attach" aria-label="Прикрепить файл">📎</button><input type="file" id="p2-file" multiple hidden><button class="rnd" id="p2-mic" aria-label="Голосовой ввод">🎙</button></div>
       <div class="p2cmp"><textarea id="p2-inp" rows="1" placeholder="Ответить…"></textarea>
         <button class="snd" id="p2-send" aria-label="Отправить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
     </aside>
+    <nav class="split-tabs" id="split-tabs" hidden aria-label="Рабочие окна"><button data-p2-tab="1">Чат 1</button><button data-p2-tab="2">Чат 2</button></nav>
+
+    <!-- мини-панель: агент работает, пока ты в другом чате -->
 
     <div class="cmp" id="cmp" hidden>
+      <!-- как в Claude Code: что делает агент и сколько уже работает — прямо над полем ввода -->
+      <div class="runline" id="runline" hidden><span class="rspin" aria-hidden="true"></span><span class="rph" id="rl-phase">Работает</span><span class="rtm" id="rl-time">0 с</span></div>
+      <div class="queue" id="queue" hidden aria-label="Сообщения после текущей задачи"></div>
       <div class="cb" id="cb">
         <div class="cbody">
-        <label class="sr" for="inp">Сообщение</label>
-        <textarea id="inp" placeholder="Что сделать в этом проекте?" rows="1"></textarea>
+        <div class="input-wrap">
+          <label class="sr" for="inp">Сообщение</label>
+          <textarea id="inp" placeholder="Что сделать в этом проекте?" rows="1"></textarea>
+          <button class="snd" id="btn-send" aria-label="Отправить"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
         <div class="atts" id="atts" hidden></div>
         <div class="cbar">
           <button class="rnd" id="btn-attach" aria-label="Прикрепить файл" title="Прикрепить файл или скриншот">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8L13 3.9a3.7 3.7 0 0 1 5.2 5.2L9.9 17.4a1.8 1.8 0 0 1-2.6-2.6L15 7.1"/></svg></button>
           <input type="file" id="file-inp" multiple hidden>
           <button class="mt agbtn" id="btn-agent" aria-label="Выбрать агента"></button>
+          <button class="mt teambtn" id="btn-team" aria-pressed="false" title="Команда агентов: задача по ролям — план, визуал, тесты"><span class="tdots"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span><span>Команда</span></button>
+          <button class="team-more" id="btn-team-menu" aria-label="Состав команды" title="Участники команды">⌄</button>
           <button class="mt" id="btn-model">—</button>
           <button class="mt" id="btn-effort">—</button>
           <button class="mt" id="btn-perm">acceptEdits</button>
+          <button class="rnd" id="btn-cfg" aria-label="Настройки композера" title="Модель, скорость, разрешения">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8h8M20 8h-4M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2.2"/><circle cx="6" cy="16" r="2.2"/></svg></button>
           <button class="ctxdot" id="btn-ctxdot" hidden aria-label="Заполнение контекста">
             <span class="ring"></span><span class="pc"></span></button>
           <div class="grow"></div>
-          <button class="rnd gem" id="btn-gemini" hidden aria-label="Спросить собеседника" title="Спросить собеседника про этот чат">
-            <i class="pico" style="--src:url(/icons/providers/gemini.svg)"></i></button>
+          <button class="rnd gem" id="btn-gemini" hidden aria-label="Ассистент" title="Ассистент — поговорить про этот чат">
+            <span class="awave"><i></i><i></i><i></i><i></i><i></i></span></button>
           <button class="rnd" id="btn-mic" aria-pressed="false" aria-label="Голосовой ввод">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
-          <button class="snd" id="btn-send" aria-label="Отправить">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          <button class="mt sendmode" id="btn-sendmode" hidden aria-label="Режим уточнения"></button>
         </div>
         </div>
       </div>
@@ -119,8 +170,33 @@
       </div>
     </div>
   </main>
+
+  <!-- нижняя навигация на телефоне -->
+  <nav class="bnav" id="bnav" aria-label="Разделы">
+    <button data-nav="dash" aria-label="Главная"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1.5 1.5 0 0 1-1.5 1.5H15v-6h-6v6H4.5A1.5 1.5 0 0 1 3 20z"/></svg><span>Главная</span></button>
+    <button data-nav="projects" aria-label="Проекты"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg><span>Проекты</span></button>
+    <button data-nav="chat" aria-label="Чаты"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg><span>Чаты</span></button>
+    <button data-nav="board" aria-label="Доска"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="6" height="16" rx="1.5"/><rect x="11" y="4" width="6" height="10" rx="1.5"/><rect x="19" y="4" width="2" height="7" rx="1"/></svg><span>Доска</span></button>
+    <button data-nav="more" aria-label="Настройки и профиль"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Настройки</span></button>
+  </nav>
 </div>
 
+<!-- ассистент Depo: плавающая кнопка на главной (телефон) и сам разговор -->
+<button class="asstfab" id="asst-fab" aria-label="Ассистент"><span class="awave"><i></i><i></i><i></i><i></i><i></i></span></button>
+<div class="asst" id="asst" hidden role="dialog" aria-label="Ассистент Depo">
+  <div class="asst-in">
+    <div class="asst-top"><div class="asst-scopes" id="asst-scopes"></div><button class="asst-x" id="asst-x" aria-label="Закрыть">✕</button></div>
+    <div class="asst-orbw"><span class="halo"></span><div class="asst-orb" id="asst-orb"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><span class="glass"></span></div></div>
+    <div class="asst-st" id="asst-st">готов</div>
+    <div class="asst-caps" id="asst-caps"></div>
+    <form class="asst-type" id="asst-type"><input id="asst-q" type="text" placeholder="Спросить текстом…" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Спросить">↑</button></form>
+    <div class="asst-chat" id="asst-chat" hidden><button type="button" data-cm="explain">Объяснить ход в чате</button><button type="button" data-cm="draft">Подготовить уточнение агенту</button></div>
+    <div class="asst-bar"><button class="asst-b" id="asst-kb" title="Спросить текстом" aria-label="Спросить текстом"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button><button class="asst-b mic" id="asst-mic" title="Микрофон" aria-label="Микрофон"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button><button class="asst-b end" id="asst-end" title="Завершить" aria-label="Завершить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="asst-who" id="asst-who"></div>
+  </div>
+</div>
+
+<!-- разговор с собеседником голосом -->
 <div class="liveov" id="live" hidden>
   <div class="box">
     <div class="hd"><b>Разговор с собеседником</b>

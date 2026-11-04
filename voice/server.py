@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Распознавание речи для Depo, локально на малине.
+#   • Vosk  — живой черновик, пока ты ещё говоришь (быстрый, без пунктуации)
+#   • faster-whisper — чистовик: знаки препинания и английские слова как есть
+# Наружу не уходит ничего.
 import json, os, re, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -48,6 +52,7 @@ def reap():
         for k in [k for k, v in sessions.items() if now - v.at > IDLE_SEC]:
             sessions.pop(k, None)
 
+# Whisper иногда зацикливает фразу на тишине — отсекаем повтор
 def clean(text):
     t = re.sub(r'\s+', ' ', (text or '')).strip()
     parts = [p for p in re.split(r'(?<=[.!?…])\s+', t) if p]
@@ -59,7 +64,7 @@ def clean(text):
     return ' '.join(out)
 
 def transcribe(pcm, draft=''):
-    if whisper is None or len(pcm) < RATE:
+    if whisper is None or len(pcm) < RATE:          # меньше полсекунды — чистовик не нужен
         return None
     import numpy as np
     audio = np.frombuffer(bytes(pcm), dtype=np.int16).astype(np.float32) / 32768.0

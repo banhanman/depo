@@ -1,3 +1,5 @@
+// Проверяем саму механику входа: псевдотерминал, вывод CLI и ответ владельца.
+// Настоящие claude/codex не трогаем — подставляем безобидную интерактивную команду.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Linker, CMD } from '../lib/link.mjs';
