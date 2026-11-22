@@ -1,4 +1,3 @@
-// Передача чата между агентами: свежие ходы не теряются, «собеседник» сменой агента не считается.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -49,7 +48,7 @@ test('при урезании по длине теряется старое, а 
   const ho = handoff.build(h, { id: c.id }, 'claude', 'kimi');
   assert.ok(ho.text.length <= 8000, `передача ${ho.text.length} символов`);
   assert.match(ho.text, /САМОЕ-СВЕЖЕЕ/);
-  assert.match(ho.text, /Что делать дальше/);       // инструкция в конце не отрезана
+  assert.match(ho.text, /Что делать дальше/);
 });
 
 test('правки Codex (changes[].path) и Kimi (path) считаются тронутыми файлами', () => {
@@ -132,7 +131,7 @@ test('команду выключили и дальше пишут одному 
   c.run('codex'); c.add('assistant', 'text', 'Вёрстка готова');
   c.run('kimi'); c.add('assistant', 'text', 'ИТОГ-ТЕСТОВ: всё зелёное');
   const last = handoff.lastAgent(h, c.id);
-  assert.equal(last, 'kimi');                       // ≠ codex — значит, Depo соберёт передачу
+  assert.equal(last, 'kimi');
   const ho = handoff.build(h, { id: c.id, project_id: pid, cwd: tmp }, last, 'codex');
   assert.match(ho.text, /ИТОГ-ТЕСТОВ/);
   assert.match(ho.text, /УРОК-ПРОЕКТА/);

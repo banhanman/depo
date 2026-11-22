@@ -15,7 +15,6 @@ const b64u = b => Buffer.from(b).toString('base64url');
 const fromB64u = s => Buffer.from(String(s), 'base64url');
 const hmac = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 
-// Подписчик со своей парой P-256 и auth-секретом — как настоящий браузер.
 function makeSubscriber(endpoint = 'https://push.example/sub/1') {
   const ua = crypto.createECDH('prime256v1');
   ua.generateKeys();
@@ -27,7 +26,6 @@ function makeSubscriber(endpoint = 'https://push.example/sub/1') {
 }
 const withAuth = s => (s.sub.keys.auth = b64u(s.auth), s);
 
-// Расшифровка aes128gcm на стороне «браузера» — зеркало push.encrypt.
 function decrypt(sub, body) {
   const salt = body.subarray(0, 16);
   const idlen = body[20];
@@ -74,7 +72,7 @@ test('подписка сохраняется, отзывается и вали�
   const s = withAuth(makeSubscriber());
   push.subscribe(h, s.sub);
   assert.equal(push.state(h).subs, 1);
-  push.subscribe(h, s.sub); // повтор — не дубль
+  push.subscribe(h, s.sub);
   assert.equal(push.state(h).subs, 1);
   push.unsubscribe(h, s.sub.endpoint);
   assert.equal(push.state(h).subs, 0);
@@ -117,6 +115,6 @@ test('недоступный push-сервис не роняет broadcast', asy
     'http://127.0.0.1:1/x', JSON.stringify(withAuth(makeSubscriber()).sub.keys), Date.now());
   push.broadcast(h, { title: 'Depo', body: 'тест' });
   await new Promise(r => setTimeout(r, 300));
-  assert.equal(push.state(h).subs, 1); // не 404/410 — подписку оставили
+  assert.equal(push.state(h).subs, 1);
   h.run('DELETE FROM push_subs');
 });

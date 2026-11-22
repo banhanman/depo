@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { projectFileUrl, isImagePath } from '../public/file-links.js';
+import { projectFileUrl, projectPageUrl, isImagePath, isPagePath } from '../public/file-links.js';
 
 const project = { id: 7, path: '/home/test/project' };
 const url = rel => `/api/projects/7/raw?path=${encodeURIComponent(rel)}`;
@@ -31,4 +31,14 @@ test('изображения отличаются от файлов для ск�
   assert.ok(isImagePath('vector.svg'));
   assert.equal(isImagePath('archive.zip'), false);
   assert.equal(isImagePath('document.pdf'), false);
+});
+
+test('страницу открываем предпросмотром, а не скачиванием', () => {
+  assert.ok(isPagePath('prototypes/index.html'));
+  assert.ok(isPagePath('a.HTM'));
+  assert.equal(isPagePath('style.css'), false);
+  assert.equal(projectPageUrl(project, 'prototypes/index.html'), '/preview/7/prototypes/index.html');
+  assert.equal(projectPageUrl(project, 'файлы/новая страница.html'), '/preview/7/' + encodeURIComponent('файлы') + '/' + encodeURIComponent('новая страница.html'));
+  assert.equal(projectPageUrl(project, '../outside.html'), null);
+  assert.equal(projectPageUrl(project, 'https://example.com/a.html'), null);
 });

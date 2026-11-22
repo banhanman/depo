@@ -1,6 +1,3 @@
-// Менеджер обновлений AI CLI: все четыре агента на модели настоящего окружения малины —
-// обёртки с sing-box (claude, codex), глобальные npm-пакеты, нативные сборки Claude.
-// Сеть, npm и sudo подменены; сами CLI — настоящие исполняемые скрипты, версию отдают запуском.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +20,6 @@ function world(t, { versions = { codex: '0.160.0', kimi: '2.4.0', gemini: '0.66.
   const calls = path.join(root, 'npm-calls.log');
   for (const d of [bin, gbin, nm, cv]) fs.mkdirSync(d, { recursive: true });
 
-  // глобальные npm-пакеты: исполняемый файл читает версию из своего package.json — как настоящие
   for (const [id, pkg] of Object.entries(PKGS)) {
     const dir = path.join(nm, pkg);
     fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
@@ -32,12 +28,10 @@ function world(t, { versions = { codex: '0.160.0', kimi: '2.4.0', gemini: '0.66.
       `#!${NODE}\nconst v=require(${JSON.stringify(path.join(dir, 'package.json'))}).version;\nif(v.startsWith('9.9.9'))process.exit(3);\nconsole.log(${id === 'codex' ? "'codex-cli '+v" : 'v'})\n`, { mode: 0o755 });
     fs.symlinkSync(path.join(dir, 'bin', 'cli.js'), path.join(gbin, id));
   }
-  // обёртка Codex с прокси → глобальный codex; Claude — обёртка на нативную сборку
-  fs.writeFileSync(path.join(bin, 'codex'), `#!/usr/bin/env bash\n# через sing-box\n${PROXY_LINES}exec ${path.join(gbin, 'codex')} "$@"\n`, { mode: 0o775 });
+  fs.writeFileSync(path.join(bin, 'codex'), `#!/usr/bin/env bash\n# через прокси\n${PROXY_LINES}exec ${path.join(gbin, 'codex')} "$@"\n`, { mode: 0o775 });
   fs.writeFileSync(path.join(cv, claude), claudeBin(claude), { mode: 0o755 });
-  fs.writeFileSync(path.join(bin, 'claude'), `#!/usr/bin/env bash\n# Claude ВСЕГДА через sing-box\n${PROXY_LINES}export NODE_USE_ENV_PROXY=1\nexec ${path.join(cv, claude)} "$@"\n`, { mode: 0o775 });
+  fs.writeFileSync(path.join(bin, 'claude'), `#!/usr/bin/env bash\n# Claude через прокси\n${PROXY_LINES}export NODE_USE_ENV_PROXY=1\nexec ${path.join(cv, claude)} "$@"\n`, { mode: 0o775 });
 
-  // npm: root -g и install -g pkg@ver (FAIL_PKG — падает, BREAK_PKG — ставит неработающую версию)
   fs.writeFileSync(path.join(bin, 'npm'), `#!${NODE}
 const fs=require('fs'),path=require('path');const a=process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(calls)},a.join(' ')+'\\n');
@@ -52,7 +46,6 @@ fs.writeFileSync(f,JSON.stringify({name:pkg,version:ver}));
   fs.writeFileSync(path.join(bin, 'sudo'), `#!/usr/bin/env bash\n[ "$1" = -n ] && shift\n[ "$SUDO_OK" = 1 ] || { echo 'sudo: a password is required' >&2; exit 1; }\n[ "$1" = true ] && exit 0\nchmod u+w ${JSON.stringify(nm)}/*/* 2>/dev/null\nexec "$@"\n`, { mode: 0o755 });
   if (rootOwned) for (const pkg of Object.values(PKGS)) fs.chmodSync(path.join(nm, pkg), 0o555);
 
-  // официальный источник: npm dist-tags и downloads.claude.ai (latest, манифест, бинарник)
   const tags = { codex: '0.166.0', kimi: '2.4.1', gemini: '0.66.0', ...latest };
   const blobs = new Map();
   const net = { claudeLatest, badChecksum: false, hits: [] };
@@ -234,7 +227,7 @@ test('после установки пропал вход в аккаунт — 
   let logged = true;
   w.ctx.run = async (cmd, args, o) => {
     const r = await cu.runCmd(cmd, args, o);
-    if (args.includes('@openai/codex@0.166.0')) logged = false;     // «обновление стёрло авторизацию»
+    if (args.includes('@openai/codex@0.166.0')) logged = false;
     return r;
   };
   const m = mgr(w, { authOk: () => logged });
@@ -300,11 +293,11 @@ test('обёртка с двумя ветками exec (с прокси и бе�
 
 test('другой процесс Depo уже обновляет (lock) — второй не лезет', async t => {
   const w = world(t);
-  fs.writeFileSync(w.ctx.lockFile, String(process.ppid));          // живой чужой процесс
+  fs.writeFileSync(w.ctx.lockFile, String(process.ppid));
   const r = await mgr(w).update('kimi');
   assert.equal(r.status, 'queued');
   assert.equal(w.npmCalls().length, 0);
-  fs.writeFileSync(w.ctx.lockFile, '999999');                       // протухший lock забираем
+  fs.writeFileSync(w.ctx.lockFile, '999999');
   assert.equal((await mgr(w).update('kimi')).status, 'updated');
   assert.ok(!fs.existsSync(w.ctx.lockFile), 'lock снят');
 });
@@ -357,9 +350,19 @@ test('сторож после обновления: ошибки лимитов 
   assert.ok(r, 'на втором падении — попытка отката');
   assert.equal(r.from, '2.5.0');
   assert.ok(logs.some(l => /упал \(2\/2\)/.test(l)));
-  // давно обновлённый агент сторожа не будит
   h.setting('cliupd:codex', JSON.stringify({ current: '1.0.0', prev: '0.9.0', updated_at: Date.now() - 72 * 3600e3 }));
   assert.equal(await m.reportRun('codex', { ok: false, error: 'boom' }), null);
+});
+
+test('сторож: ход без текста ошибки не улика, и на версию, помеченную плохой, назад не откатывает', async () => {
+  const store = new Map();
+  const h = { setting: (k, v) => v === undefined ? store.get(k) : store.set(k, String(v)), log() { } };
+  const m = cu.createManager({ h, ctx: { lockFile: path.join(os.tmpdir(), `depo-wd2-${process.pid}.lock`), fetch: async () => new Response('', { status: 404 }) } });
+  h.setting('cliupd:kimi', JSON.stringify({ auto: true, current: '2.5.2', prev: '2.4.1', updated_at: Date.now() }));
+  for (let i = 0; i < 3; i++) assert.equal(await m.reportRun('kimi', { ok: false, error: '' }), null);
+  assert.equal(JSON.parse(h.setting('cliupd:kimi')).bad_runs ?? 0, 0);
+  h.setting('cliupd:kimi', JSON.stringify({ auto: true, current: '2.4.1', prev: '2.5.2', failed_version: '2.5.2', updated_at: Date.now() }));
+  for (let i = 0; i < 3; i++) assert.equal(await m.reportRun('kimi', { ok: false, error: 'SyntaxError: boom' }), null);
 });
 
 test('npm: свежий релиз выдерживается, ставится предыдущая выдержанная версия', async () => {

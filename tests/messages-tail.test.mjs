@@ -23,7 +23,6 @@ test('история отдаёт ПОСЛЕДНИЕ сообщения, а не
   const home = path.join(root, 'home'), project = path.join(home, 'project'), data = path.join(root, 'data');
   const bin = path.join(root, 'bin');
   fs.mkdirSync(project, { recursive: true }); fs.mkdirSync(bin);
-  // пробы лимитов не должны ходить в настоящие CLI — они переживают сервер и пишут в HOME
   fs.writeFileSync(path.join(bin, 'kimi'), `#!${process.execPath}\nprocess.exit(0);\n`, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'claude'), `#!${process.execPath}\nprocess.exit(0);\n`, { mode: 0o755 });
 
@@ -40,7 +39,6 @@ test('история отдаёт ПОСЛЕДНИЕ сообщения, а не
   let log = ''; server.stdout.on('data', d => { log += d; }); server.stderr.on('data', d => { log += d; });
   t.after(async () => {
     if (server.exitCode === null) { const exited = once(server, 'exit'); server.kill('SIGTERM'); await exited; }
-    // внучатые пробы лимитов могут дописать ~/.kimi-code уже после гибели сервера
     for (let i = 0; i < 15 && fs.existsSync(root); i++) {
       fs.rmSync(root, { recursive: true, force: true });
       if (fs.existsSync(root)) await new Promise(r => setTimeout(r, 200));
@@ -56,10 +54,8 @@ test('история отдаёт ПОСЛЕДНИЕ сообщения, а не
   assert.equal(d.messages.length, 2000, log);
   assert.equal(d.messages.at(-1).text, 'сообщение 2099');
   assert.equal(d.messages[0].text, 'сообщение 100');
-  // порядок по возрастанию id сохранён
   assert.ok(d.messages[0].id < d.messages.at(-1).id);
 
-  // дочитка хвоста через after работает как раньше
   const tail = await (await fetch(`${base}/api/chats/${cid}/messages?after=${d.messages.at(-2).id}`, { headers: { cookie } })).json();
   assert.deepEqual(tail.messages.map(m => m.text), ['сообщение 2099']);
 });

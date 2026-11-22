@@ -24,7 +24,6 @@ test('проводник: выключатель на стороне Depo и н�
   assert.equal(remote.clientIp(cfg, req('localhost', '100.64.9.9', '5.6.7.8')), '100.64.9.9');
   assert.match(remote.relayCompose({ target: '100.64.0.10', port: 4620 }), /TCP:100\.64\.0\.10:4620/);
 
-  // по адресу проводника в NetBird — даже с поддельным Host
   h.setting('remote', JSON.stringify({ ...remote.get(h), enabled: false, relay_peer: '100.64.0.20' }));
   cfg = remote.get(h);
   assert.match(remote.gate(cfg, req('100.64.0.10', '100.64.0.20')), /выключен/);
@@ -55,7 +54,6 @@ test('три неверных пароля снаружи выключают у�
   assert.equal(remote.loginFailed(h, '4.4.4.4').locked, false, 'после включения счёт заново');
   assert.ok(remote.relayPublic('/') && remote.relayPublic('/api/login') && remote.relayPublic('/icons/icon-180.png') && remote.relayPublic('/enter', '/enter'));
   assert.ok(!remote.relayPublic('/health') && !remote.relayPublic('/api/state') && !remote.relayPublic('/ca.crt') && !remote.relayPublic('/app.js') && !remote.relayPublic('/login'));
-  // по умолчанию — сразу после первой ошибки
   m.delete('remote_max_fails'); remote.set(h, { enabled: true });
   assert.equal(remote.loginFailed(h, '5.5.5.5').locked, true);
   assert.equal(remote.loginPath(h), '/enter');

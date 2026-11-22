@@ -1,4 +1,4 @@
-export function projectFileUrl(project, ref) {
+function cleanRel(project, ref) {
   if (!project?.id || !project.path || !ref) return null;
   const text = String(ref).trim();
   if (!text || /[<>]/.test(text) || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(text)) return null;
@@ -11,8 +11,18 @@ export function projectFileUrl(project, ref) {
   const parts = rel.split('/');
   if (parts.includes('..')) return null;
   const clean = parts.filter(part => part && part !== '.').join('/');
-  if (!clean) return null;
-  return `/api/projects/${encodeURIComponent(project.id)}/raw?path=${encodeURIComponent(clean)}`;
+  return clean || null;
+}
+
+export function projectFileUrl(project, ref) {
+  const clean = cleanRel(project, ref);
+  return clean && `/api/projects/${encodeURIComponent(project.id)}/raw?path=${encodeURIComponent(clean)}`;
+}
+
+export function projectPageUrl(project, ref) {
+  const clean = cleanRel(project, ref);
+  return clean && `/preview/${encodeURIComponent(project.id)}/${clean.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 export const isImagePath = ref => /\.(?:png|jpe?g|gif|webp|svg)$/i.test(String(ref || '').trim());
+export const isPagePath = ref => /\.html?$/i.test(String(ref || '').trim());

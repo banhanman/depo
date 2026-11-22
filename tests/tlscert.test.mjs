@@ -20,7 +20,7 @@ test('перевыпуск сертификата тем же CA: новые и�
     assert.equal(await tc.ensureSans(dir, ['203.0.113.10', 'depo-host.netbird.cloud']), true);
     const sans = await tc.currentSans(dir);
     for (const n of ['100.64.0.10', 'depo-host', '203.0.113.10', 'depo-host.netbird.cloud']) assert.ok(sans.includes(n), n);
-    execFileSync('openssl', ['verify', '-CAfile', 'ca.crt', 'server.crt'], { cwd: dir });   // подписан тем же CA
+    execFileSync('openssl', ['verify', '-CAfile', 'ca.crt', 'server.crt'], { cwd: dir });
     assert.ok(fs.existsSync(path.join(dir, 'server.crt.prev')));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

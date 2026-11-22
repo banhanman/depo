@@ -1,5 +1,3 @@
-// Свой экран терминала: проверяем то, из-за чего он и появился —
-// перерисовка кадра не должна копиться простынёй.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Screen } from '../lib/vt.mjs';

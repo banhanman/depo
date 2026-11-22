@@ -1,4 +1,3 @@
-// Несколько аккаунтов на агента: снимок текущего входа, добавление, переключение — на подставном HOME.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -43,7 +42,6 @@ test('Claude: добавить второй аккаунт и переключа
   let list = acc.list(data, 'claude');
   assert.deepEqual(list.map(p => [p.email, p.active]), [['b@x.ru', true], ['a@x.ru', false]]);
 
-  // CLI тем временем обновил токен у b — при переключении свежий токен должен сохраниться
   write('.claude/.credentials.json', { claudeAiOauth: { accessToken: 'tok-b2', subscriptionType: 'max' } });
   await acc.use(data, 'claude', 'a@x.ru', { meters: { limits: [{ label: 'Сессия · 5 ч', pct: 40 }] } });
   assert.equal(JSON.parse(fs.readFileSync(path.join(home, '.claude/.credentials.json'), 'utf8')).claudeAiOauth.accessToken, 'tok-a');

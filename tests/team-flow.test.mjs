@@ -1,5 +1,3 @@
-// Команда агентов от начала до конца на подставных CLI:
-// план Claude → утверждение → визуал Codex → тесты Kimi (упали) → исправление Codex → тесты (прошли) → ревью Claude.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -23,7 +21,6 @@ test('команда агентов: план, шаги по ролям, воз�
   fs.writeFileSync(path.join(home, '.codex', 'auth.json'), JSON.stringify({ tokens: { account_id: '1' } }));
   fs.writeFileSync(path.join(kimiHome, 'credentials', 't.json'), JSON.stringify({ access_token: 'test-only' }));
   const log = path.join(root, 'calls.log');
-  // claude: stream-json разговор; план — если просят планировать
   fs.writeFileSync(path.join(bin, 'claude'), `#!${process.execPath}
 import fs from 'node:fs';const a=process.argv.slice(2);
 if(!a.includes('--input-format')){console.log(JSON.stringify({result:''}));process.exit(0)}
@@ -85,6 +82,11 @@ setTimeout(()=>{console.log(JSON.stringify({role:'assistant',content:n===0?'Уп
     ['ui:codex:done', 'test:kimi:failed', 'ui:codex:done', 'test:kimi:done', 'lead:claude:done']);
   assert.deepEqual(fs.readFileSync(log, 'utf8').trim().split('\n'),
     ['claude plan plan', 'codex ui', 'kimi test', 'codex fix', 'kimi test', 'claude step']);
-  const runs = (await call(`/api/chats/${chat.id}/messages`)).value.messages.filter(m => m.role === 'user' && m.kind === 'text');
+  const msgs = (await call(`/api/chats/${chat.id}/messages`)).value.messages;
+  const runs = msgs.filter(m => m.role === 'user' && m.kind === 'text');
   assert.equal(runs.length, 1, 'в ленте одна реплика владельца — шаги команды без лишних «сообщений от тебя»');
+  const planText = msgs.filter(m => m.role === 'assistant' && m.kind === 'plan');
+  assert.equal(planText.length, 1, 'план ведущего сохранён, но скрыт из ленты');
+  assert.match(planText[0].text, /"steps"/);
+  assert.equal(msgs.filter(m => m.kind === 'text' && /"steps"/.test(m.text || '')).length, 0, 'сырого JSON плана в ленте нет');
 });

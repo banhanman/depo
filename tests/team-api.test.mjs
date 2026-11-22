@@ -21,7 +21,6 @@ test('HTTP: настройки команды (модель, раздумья, �
   const root = fs.mkdtempSync(path.join(process.cwd(), '.team-api-test-'));
   const home = path.join(root, 'home'), data = path.join(root, 'data'), bin = path.join(root, 'bin');
   fs.mkdirSync(home, { recursive: true }); fs.mkdirSync(bin);
-  // фоновые вызовы CLI (каталог Kimi и т.п.) завершаются мгновенно и не переживают тест
   for (const name of ['kimi', 'claude', 'codex', 'gemini']) {
     fs.writeFileSync(path.join(bin, name), `#!${process.execPath}\nprocess.exit(0);\n`, { mode: 0o755 });
   }
@@ -56,14 +55,12 @@ test('HTTP: настройки команды (модель, раздумья, �
   assert.equal(saved.status, 200, JSON.stringify(saved.value));
   assert.equal(saved.value.config.roles.find(r => r.id === 'test').instructions, 'Гоняй npm test дважды.\n\nПиши по-русски.');
 
-  // перечитали после сохранения: значения на месте
   const testRole = (await call('/api/team/config')).value.config.roles.find(r => r.id === 'test');
   assert.equal(testRole.provider, 'kimi');
   assert.equal(testRole.model, 'kimi-code/k3');
   assert.equal(testRole.effort, 'high');
   assert.equal(testRole.instructions, 'Гоняй npm test дважды.\n\nПиши по-русски.');
 
-  // мусор в указаниях отсекается при сохранении
   const dirty = await call('/api/team/config', 'POST', {
     ...cfg, roles: cfg.roles.map(r => r.id === 'test' ? { ...r, instructions: '  лишние пробелы\r\nи \r возвраты каретки  ' } : r),
   });

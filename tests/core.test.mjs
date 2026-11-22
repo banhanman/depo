@@ -60,7 +60,7 @@ test('лимиты разбираются из ответа /usage', () => {
   assert.equal(u.limits.length, 2);
   assert.equal(u.limits[0].pct, 11);
   assert.equal(u.limits[0].label, 'Сессия · 5 ч');
-  assert.match(u.limits[1].resets, /2 нояб\.?, 00:59/);   // даты из /usage приводим к русскому виду
+  assert.match(u.limits[1].resets, /2 нояб\.?, 00:59/);
   assert.equal(u.today.requests, 1105);
 });
 
@@ -95,7 +95,7 @@ test('передача между провайдерами собирает за
   add('assistant', 'text', 'Поправил минимум в гриде');
 
   const ho = handoff.build(h, { id: cid }, 'claude', 'codex');
-  assert.deepEqual(ho.files, ['src/a.css']);          // Read не считается правкой
+  assert.deepEqual(ho.files, ['src/a.css']);
   assert.match(ho.text, /Почини вёрстку каталога/);
   assert.match(ho.text, /от Claude Code к Codex/);
   assert.match(ho.text, /Поправил минимум/);

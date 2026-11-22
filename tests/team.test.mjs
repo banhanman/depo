@@ -59,7 +59,6 @@ test('команда: указания роли сохраняются, чист
   assert.doesNotMatch(pp, /Гоняй npm test/);
 });
 
-// ─────────── выключенные из команды агенты ───────────
 test('off: выключили Kimi — роль test берёт Codex (его модель), выключили и Codex — Claude', () => {
   const cfg = team.normalize({ ...team.DEFAULT, off: ['kimi'] });
   const test1 = team.assignee(cfg, team.role(cfg, 'test'));
@@ -93,4 +92,11 @@ test('off: в задании на план выключенный агент н�
   const p = team.planPrompt(team.normalize({ ...team.DEFAULT, off: ['kimi'] }), 'задача');
   assert.doesNotMatch(p, /\(агент Kimi Code\)/);
   assert.match(p, /test: .*\(агент Codex, вместо Kimi Code/);
+});
+
+test('вступление ведущего отделяется от плана — в карточке одна фраза, а не простыня', () => {
+  const text = 'Сначала ставлю скиллы, потом Codex переделывает визуал.\n\n```json\n{"steps":[{"role":"ui","title":"Вёрстка","do":"сделать"}]}\n```';
+  assert.equal(team.planNote(text), 'Сначала ставлю скиллы, потом Codex переделывает визуал.');
+  assert.equal(team.planNote('```json\n{"steps":[]}\n```'), null, 'нет вступления — нечего показывать');
+  assert.ok(team.planNote('а'.repeat(400)).length <= 300, 'длинное вступление подрезаем');
 });

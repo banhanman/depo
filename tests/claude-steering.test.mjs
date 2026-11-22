@@ -35,8 +35,6 @@ test('Claude получает уточнение в stdin того же проц
   assert.equal(h.get('SELECT status FROM runs WHERE chat_id=?', id).status, 'done');
 });
 
-// Фейковый Claude по протоколу 2.1.x: каждое сообщение из stdin — отдельный ход;
-// с --replay-user-messages эхо приходит, когда сообщение забрано в работу.
 const fakeClaude = (bin, { echo = true, turnMs = 150 } = {}) => {
   const fake = path.join(bin, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}
@@ -71,7 +69,7 @@ test('Claude: уточнение на ходу подтверждается эх
   await waitFor(() => !runner.isRunning(id));
   assert.equal(JSON.parse(h.get('SELECT json FROM messages WHERE id=?', m.id).json).steer, 'accepted');
   assert.ok(events.some(e => e.type === 'message-patch' && e.id === m.id && e.json.steer === 'accepted'));
-  const answers = h.all("SELECT text FROM messages WHERE chat_id=? AND role='assistant'", id).map(r => r.text);
+  const answers = h.all("SELECT text FROM messages WHERE chat_id=? AND role='assistant'", id).map(r => r.text.split('\n')[0]);
   assert.deepEqual(answers, ['ответ на: Первая задача', 'ответ на: Уточнение']);
 });
 

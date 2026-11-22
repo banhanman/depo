@@ -25,8 +25,7 @@
     <p class="foot" id="tls-hint" hidden>Для микрофона нужен HTTPS: <a id="tls-link" style="color:var(--accent)">открыть по https</a> · <a href="/ca.crt" style="color:var(--accent)">сертификат для телефона</a></p>
   </form>
 </main>
-<script>
-const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
+<script>const f = document.getElementById('f'), err = document.getElementById('err'), go = document.getElementById('go');
 document.getElementById('host').textContent = location.hostname;
 document.getElementById('login').focus();
 if (location.protocol === 'http:') {
@@ -49,7 +48,6 @@ f.addEventListener('submit', async e => {
       throw new Error(d.error || 'Не вышло войти.');
     }
     if (d.need_code) {
-      // новое устройство: код пришёл в Телеграм
       ticket = d.ticket; codeBox.hidden = false; code.value = '';
       login.disabled = password.disabled = true;
       err.textContent = 'Отправил код в Телеграм — введи его.';

@@ -1,5 +1,4 @@
-/* ───────── Depo · клиент ───────── */
-import { projectFileUrl, isImagePath } from './file-links.js';
+import { projectFileUrl, projectPageUrl, isImagePath, isPagePath } from './file-links.js';
 
 const $ = s => document.querySelector(s);
 const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
@@ -8,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const S = {
   user: null, projects: [], chats: [], meters: null, running: [],
   pid: null, cid: null, messages: [], archOpen: false, live: null, host: null, connected: true, models: null, approvals: [], prefs: {}, https: null, atts: [], ctx: {},
-  queues: {}, steering: {}, sendMode: 'now', runs: {}, history: new Map(), loadingChats: new Map(), chatState: new Map(), feedFrom: 0, scrollKeep: null,
+  queues: {}, steering: {}, sendMode: 'now', runs: {}, tasks: {}, tasksAt: {}, queueOpen: false, history: new Map(), loadingChats: new Map(), chatState: new Map(), feedFrom: 0, scrollKeep: null,
   view: 'chat', dash: null,
 };
 const STATE_RU = { running: 'работает', attention: 'нужен ответ', idle: 'ожидает', done: 'завершён', error: 'ошибка' };
@@ -20,7 +19,6 @@ const modelName = (prov, id) => {
 };
 const permName = id => (S.models?.permissions ?? []).find(p => p.id === id)?.name ?? id;
 
-/* ───────── сеть ───────── */
 async function api(path, opts = {}) {
   const r = await fetch(path, {
     headers: opts.body ? { 'content-type': 'application/json' } : undefined,
@@ -32,23 +30,27 @@ async function api(path, opts = {}) {
   return d;
 }
 
-/* ───────── уведомления ───────── */
 const ICONS = {
+  archive: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></svg>',
   warn: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>',
   ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>',
   copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>',
   x: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   tw: '<svg class="tw" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
   more: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>',
+  open: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1h5"/></svg>',
   un: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v8a2 2 0 002 2h12a2 2 0 002-2v-8M3 6h18v4H3zM10 14h4"/></svg>',
   pin: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2l8 8-4 1-3 3 1 5-3 1-3-5-5 5-1-1 5-5-5-3 1-3 5 1 3-3z"/></svg>',
 };
-function toast(text, kind = 'warn', ms = 6000) {
+function toast(text, kind = 'warn', ms = 6000, action = null) {
   const t = el('div', 'toast ' + kind);
-  t.innerHTML = `<span class="ic">${ICONS[kind === 'ok' ? 'ok' : 'warn']}</span><span class="tx">${esc(text)}</span><button class="x" aria-label="Закрыть">${ICONS.x}</button>`;
+  t.innerHTML = `<span class="ic">${ICONS[kind === 'ok' ? 'ok' : 'warn']}</span><span class="tx">${esc(text)}${action ? `<button type="button" class="do">${esc(action.label)}</button>` : ''}</span><button class="x" aria-label="Закрыть">${ICONS.x}</button>`;
   const drop = () => { if (!t.isConnected || t.classList.contains('bye')) return; t.classList.add('bye'); setTimeout(() => t.remove(), 220); };
   t.querySelector('.x').onclick = drop;
-  // на телефоне — как пуш сверху: новое сверху, смахивается вверх
+  if (action) t.querySelector('.do').onclick = async e => {
+    const b = e.currentTarget; b.disabled = true;
+    try { if (await action.run(b) !== false) drop(); } finally { b.disabled = false; }
+  };
   if (innerWidth <= 760) $('#toasts').prepend(t); else $('#toasts').append(t);
   let y0 = null;
   t.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
@@ -56,6 +58,14 @@ function toast(text, kind = 'warn', ms = 6000) {
   if (ms) setTimeout(drop, ms);
   return t;
 }
+async function fixOwner(dir, retry) {
+  try { await api('/api/fix-owner', { method: 'POST', body: { path: dir } }); }
+  catch (e) { toast(e.message, 'err', 0); return false; }
+  toast('Папка снова твоя', 'ok', 2500);
+  retry?.();
+}
+const ownerToast = (msg, dir, retry) => toast(msg, 'err', 0, { label: 'Вернуть себе', run: () => fixOwner(dir, retry) });
+
 async function copyText(text, button) {
   try {
     if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
@@ -90,8 +100,7 @@ document.addEventListener('click', e => {
   if (image) showProjectImage(image.dataset.full, image.dataset.name, image.dataset.file);
 });
 
-/* ───────── markdown ───────── */
-const SLOT = '␟';                       // символ-разделитель, в тексте не встречается
+const SLOT = '␟';
 function md(src, project) {
   const code = [];
   let s = String(src ?? '').replace(/\r\n/g, '\n');
@@ -107,6 +116,7 @@ function md(src, project) {
       const title = label || name;
       return `${SLOT}I${code.push(`<button type="button" class="md-image" data-full="${esc(href)}" data-name="${esc(title)}" data-file="${esc(name)}" aria-label="Увеличить: ${esc(title)}"><img src="${esc(href)}" alt="${esc(label)}" loading="lazy"></button>`) - 1}${SLOT}`;
     }
+    if (isPagePath(ref)) return `${SLOT}I${code.push(`<a class="md-file page" href="${esc(projectPageUrl(project, ref))}" target="_blank" rel="noopener">${ICONS.open}<span>${esc(label || name)}</span></a>`) - 1}${SLOT}`;
     return `${SLOT}I${code.push(`<a class="md-file" href="${esc(href)}" download="${esc(name)}">${ICONS.un}<span>${esc(label || name)}</span></a>`) - 1}${SLOT}`;
   });
   s = esc(s);
@@ -159,7 +169,6 @@ function inline(t) {
     .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
 }
 
-/* ───────── мелочи ───────── */
 const ago = ts => {
   const d = (Date.now() - ts) / 1000;
   if (d < 60) return 'сейчас';
@@ -212,7 +221,6 @@ function upsertChat(c) {
   S.chats.unshift(c); return c;
 }
 
-/* ───────── рейка проектов ───────── */
 function badgeOf(p) {
   const cs = chatsOf(p.id).filter(c => !c.archived);
   if (cs.some(c => c.state === 'attention')) return 'attention';
@@ -220,12 +228,13 @@ function badgeOf(p) {
   if (cs.some(c => c.unread)) return 'done';
   return '';
 }
-// У каждого проекта свой спокойный цвет плитки — по имени, стабильно между устройствами.
 const PHUES = [32, 200, 265, 150, 340, 12, 185, 45, 230, 300, 120, 0];
 function projHue(p) { let x = 0; for (const ch of String(p?.name ?? '')) x = (x * 31 + ch.codePointAt(0)) >>> 0; return PHUES[x % PHUES.length]; }
 const ptile = (p, cls = 'ptile') => `<span class="${cls}" style="--h:${projHue(p)}">${esc(p?.glyph || String(p?.name ?? '?').slice(0, 2))}</span>`;
 function renderRail() {
-  const live = S.projects.filter(p => !p.archived);
+  const live = S.projects.filter(p => !p.archived), arch = S.projects.length - live.length;
+  const ab = $('#btn-archive');
+  if (ab) { ab.hidden = !arch; ab.querySelector('.n').textContent = arch; ab.title = `Архив проектов: ${arch}`; }
   $('#rail').innerHTML = live.map(p => {
     const b = badgeOf(p);
     return `<button class="pbtn" data-p="${p.id}" title="${esc(p.name)} — ${esc(p.short)}" aria-current="${p.id === S.pid}">
@@ -233,7 +242,6 @@ function renderRail() {
   }).join('');
 }
 
-/* ───────── список чатов ───────── */
 function chatRow(c) {
   const meta = [STATE_RU[c.state] || c.state, ago(c.updated_at)];
   return `<div class="crow" role="button" tabindex="0" data-c="${c.id}" data-state="${c.state}" data-unread="${c.unread ? 1 : 0}" aria-current="${c.id === S.cid}">
@@ -272,7 +280,6 @@ function chatListHTML(pid, withArchive) {
   }
   return h;
 }
-// Поиск по названиям чатов всех проектов, с группировкой по проекту; закреплённые — первыми.
 function searchHTML(q) {
   const needle = q.toLowerCase();
   const groups = S.projects.filter(p => !p.archived).map(p => [p, chatsOf(p.id)
@@ -294,24 +301,24 @@ function renderSide() {
   $('#btn-pmenu').hidden = !p;
   $('#uname').textContent = S.user?.login ?? '—';
   $('#uav').textContent = (S.user?.login ?? '?')[0];
-  $('#umeta').textContent = S.host?.name ?? '';
+  $('#umeta').textContent = hostLabel();
 }
 
-/* ───────── лента ───────── */
-// Агенты-исполнители: имя и цвет официальной марки (значки — в /icons/providers).
 const AG = { claude: ['Claude', '#d97757'], codex: ['Codex', '#f2f2f3'], kimi: ['Kimi', '#b7b1ff'], gemini: ['Gemini', '#8e75b2'] };
-// Собеседник — это роль, а не агент: кем он работает, видно по значку выбранного провайдера.
 const compWho = () => S.models?.companion?.who ?? 'codex';
 const agName = p => p === 'companion' ? `Собеседник · ${(AG[compWho()] ?? AG.codex)[0]}` : (AG[p] ?? AG.claude)[0];
 const agIcon = p => {
   const id = p === 'companion' ? compWho() : p;
   return `<i class="pico" style="--src:url(/icons/providers/${AG[id] ? id : 'claude'}.svg);color:${(AG[id] ?? AG.claude)[1]}"></i>`;
 };
-// Команды и инструменты в ленте: по умолчанию спрятаны, видно только мой запрос и ответ агента.
-// Неудачные команды (.ok.bad) остаются на виду всегда — чтобы ошибка не потерялась.
 const showTools = () => (S.prefs?.tools ?? '0') === '1';
-const applyFeedPrefs = () => document.body.classList.toggle('notools', !showTools());
-// Статус уточнения, переданного на ходу. «Принято» — только по эху самого CLI, не по факту записи в stdin.
+const srvName = () => String(S.prefs?.server_name ?? '').trim();
+const hostLabel = () => srvName() || S.host?.name || '';
+const applyFeedPrefs = () => {
+  document.body.classList.toggle('notools', !showTools());
+  const um = $('#umeta'); if (um) um.textContent = hostLabel();
+  if (S.dash?.server) renderDashServer();
+};
 const STEER = {
   sent: ['sending', 'передаётся агенту…'],
   accepted: ['ok', '✓ принято агентом'],
@@ -319,7 +326,6 @@ const STEER = {
 };
 const steerBadge = st => STEER[st] ? `<span class="steer ${STEER[st][0]}">${STEER[st][1]}</span>` : '';
 function patchMessage(d) {
-  // команда закончила — одно уведомление на всю задачу (шаги не спамят)
   if (d.json?.task_id && ['done', 'error'].includes(d.json.status)) {
     const c = chatOf(d.chat_id), msg = d.json.status === 'done' ? 'команда закончила задачу' : 'команда остановилась — нужен твой взгляд';
     sysNotify('Depo · ' + msg, c?.title ?? '', d.chat_id);
@@ -337,10 +343,8 @@ function patchMessage(d) {
   node.insertAdjacentHTML('beforeend', steerBadge(d.json?.steer));
   followFeed(atBottom);
 }
-/* ───────── команда агентов: карточка плана в ленте ───────── */
 const TEAM_ST = { planning: 'ведущий составляет план…', await: 'план готов — запустить?', running: 'команда работает', done: 'готово', stopped: 'остановлено', error: 'остановилось' };
 const teamRole = id => (S.team?.roles ?? []).find(r => r.id === id);
-// Кто выполнит роль с учётом выключенных участников — тот же порядок, что team.assignee на сервере
 function teamAssignee(cfg, r) {
   const off = cfg?.off ?? [];
   if (!r || !off.includes(r.provider)) return r?.provider ?? 'claude';
@@ -351,16 +355,27 @@ function teamCard(m) {
   const j = m.json ?? {};
   const dur = s => s.started_at ? duration((s.ended_at || Date.now()) - s.started_at) : '';
   const icon = s => s.status === 'done' ? '✓' : s.status === 'failed' ? '!' : s.status === 'run' ? '' : '';
+  const steps = j.steps ?? [];
+  const done = steps.filter(s => s.status === 'done').length;
+  const count = steps.length && j.status !== 'planning'
+    ? `<span class="tn">${j.status === 'done' ? steps.length : Math.min(done + 1, steps.length)} из ${steps.length}</span>` : '';
   const n = el('div', `tcard st-${j.status}`, `
-    <div class="th"><span class="tdots"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span><b>Команда агентов</b><span class="ts">${esc(TEAM_ST[j.status] ?? j.status)}</span></div>
-    <div class="tsteps">${(j.steps ?? []).map((s, i) => `<div class="tstep ${s.status}${s.fix ? ' fix' : ''}">
+    <div class="th"><span class="tdots"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span><b>Команда агентов</b>${count}<span class="ts">${esc(TEAM_ST[j.status] ?? j.status)}</span></div>
+    ${j.note ? `<p class="tnote">${esc(j.note)}</p>` : ''}
+    <div class="tsteps">${steps.map((s, i) => `<div class="tstep ${s.status}${s.fix ? ' fix' : ''}${s.do ? ' has-do' : ''}" ${s.do ? `data-do="${i}" role="button" tabindex="0" aria-expanded="false"` : ''}>
       <span class="ti">${icon(s)}</span>
       <span class="tt">${esc(s.title)}<small>${agIcon(s.provider || teamAssignee(S.team, teamRole(s.role)))} ${esc(agName(s.provider || teamAssignee(S.team, teamRole(s.role))))} · ${esc(teamRole(s.role)?.name ?? s.role)}${s.fallback ? ` · вместо ${esc(agName(s.fallback))} (${({ off: 'выключен', ready: 'нет входа' })[s.why] ?? 'лимит'})` : ''}${s.verdict === false ? ' · проверка не прошла' : ''}</small></span>
-      <span class="tm">${s.status === 'run' || s.status === 'done' || s.status === 'failed' ? dur(s) : ''}</span></div>`).join('')}</div>
+      <span class="tm">${s.status === 'run' || s.status === 'done' || s.status === 'failed' ? dur(s) : ''}</span>
+      ${s.do ? `<p class="tdo">${esc(s.do)}</p>` : ''}</div>`).join('')}</div>
     ${j.error ? `<p class="terr">${esc(j.error)}</p>` : ''}
     <div class="tacts">${j.status === 'await' ? `<button class="btn primary" data-tgo="${j.task_id}">Запустить</button><button class="btn" data-tno="${j.task_id}">Отменить</button><span class="thint">хочешь иначе — просто напиши задачу по-другому</span>`
       : ['planning', 'running'].includes(j.status) ? `<button class="btn" data-tno="${j.task_id}">Остановить команду</button>` : ''}</div>`);
   n.dataset.mid = m.id;
+  n.querySelectorAll('[data-do]').forEach(step => {
+    const toggle = () => step.setAttribute('aria-expanded', String(step.classList.toggle('open')));
+    step.addEventListener('click', toggle);
+    step.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
   n.querySelector('[data-tgo]')?.addEventListener('click', e => { e.currentTarget.disabled = true; api(`/api/team/${j.task_id}/start`, { method: 'POST' }).catch(err => toast(err.message)); });
   n.querySelector('[data-tno]')?.addEventListener('click', () => api(`/api/team/${j.task_id}/cancel`, { method: 'POST' }).catch(err => toast(err.message)));
   return n;
@@ -382,7 +397,6 @@ function msgNode(m, chat, scope) {
     const j = m.json ?? {};
     const extra = (j.sources?.length ? `<div class="srcs">основано на: ${esc(j.sources.join(', '))}</div>` : '')
       + (j.draft ? `<div class="draft-act"><button type="button" class="btn" data-use>Вставить в поле ввода</button></div>` : '');
-    // план команды уже показан карточкой — сырой JSON шагов в ответе ведущего не дублируем
     const shown = String(m.text || '').replace(/```json\s*\{\s*"steps"[\s\S]*?```/g, '').trim() || 'План составлен — он в карточке команды выше.';
     const n = el('div', `turn a ${prov}`, `<div class="who"><span class="av">${agIcon(prov)}</span><b>${agName(prov)}</b><span class="t">${hhmm(m.ts)}</span><button type="button" class="copy-btn copy-answer" aria-label="Скопировать ответ" title="Скопировать ответ">${ICONS.copy}</button></div><div class="md">${md(shown, projectOf(c?.project_id))}</div>${extra}`);
     n.querySelector('.copy-answer').onclick = e => copyText(m.text, e.currentTarget);
@@ -402,14 +416,32 @@ function msgNode(m, chat, scope) {
     };
     return n;
   }
+  if (m.role === 'tool' && m.json?.parent) {
+    if (m.kind !== 'tool_use') return null;
+    const host = (scope ?? $('#fw')).querySelector(`.act[data-tool="${CSS.escape(m.json.parent)}"]`);
+    if (!host) return null;
+    const subs = (+host.dataset.subs || 0) + 1;
+    host.dataset.subs = subs;
+    host.dataset.sublog = ((host.dataset.sublog || '') + m.text + '\n').split('\n').slice(-300).join('\n');
+    const sb = host.querySelector('.sb'); if (sb) sb.textContent = plural(subs, ['шаг', 'шага', 'шагов']);
+    const body = host.querySelector('.body');
+    body.dataset.filled = '';
+    if (!body.hidden) host.fill?.();
+    return null;
+  }
   if (m.role === 'tool' && m.kind === 'tool_use') {
     const [name, ...rest] = (m.text || '').split('  ');
     const n = el('div', 'act');
     n.dataset.tool = m.json?.id || '';
-    n.innerHTML = `<button class="hd"><span class="n">${esc(name)}</span><span class="a">${esc(rest.join('  '))}</span><span class="m"></span><span class="ok spin-slot"><span class="spin"></span></span></button><div class="body" hidden></div>`;
+    n.innerHTML = `<button class="hd"><span class="n">${esc(name)}</span><span class="a">${esc(rest.join('  '))}</span><span class="sb"></span><span class="m"></span><span class="ok spin-slot"><span class="spin"></span></span></button><div class="body" hidden></div>`;
+    n.fill = () => {
+      const b = n.querySelector('.body');
+      b.innerHTML = `<pre>${esc(JSON.stringify(m.json?.input ?? {}, null, 2))}${n.dataset.sublog ? '\n\n— шаги помощника —\n' + esc(n.dataset.sublog.trim()) : ''}${b.dataset.result ? '\n\n— результат —\n' + esc(b.dataset.result) : ''}</pre>`;
+      b.dataset.filled = '1';
+    };
     n.querySelector('.hd').onclick = () => {
       const b = n.querySelector('.body');
-      if (!b.dataset.filled) { b.innerHTML = `<pre>${esc(JSON.stringify(m.json?.input ?? {}, null, 2))}${b.dataset.result ? '\n\n— результат —\n' + b.dataset.result : ''}</pre>`; b.dataset.filled = '1'; }
+      if (!b.dataset.filled) n.fill();
       b.hidden = !b.hidden;
     };
     return n;
@@ -453,8 +485,6 @@ function msgNode(m, chat, scope) {
   return null;
 }
 
-// Командный чат: в одном ходе (шаге) агент пишет много коротких реплик — видна только последняя,
-// предыдущие сворачиваются в строку «ход шага · N сообщений» прямо над ней. Обычные чаты не трогаем.
 function placeMsg(fw, n, m, chat) {
   fw.append(n);
   if (!teamChat(chat) || !m.run_id || m.role !== 'assistant' || m.kind !== 'text' || !n.classList.contains('turn')) return;
@@ -481,7 +511,12 @@ function placeMsg(fw, n, m, chat) {
   fw.insertBefore(g, n);
 }
 
-const FEED_CHUNK = 200;                    // длинные чаты рисуем окном: сначала только хвост
+const FEED_CHUNK = 200;
+function chunkBack(list, from) {
+  let i = from, n = 0;
+  while (i > 0 && n < FEED_CHUNK) { i--; if (!list[i]?.json?.parent) n++; }
+  return i;
+}
 function renderFeed() {
   const fw = $('#fw');
   fw.innerHTML = '';
@@ -491,8 +526,8 @@ function renderFeed() {
     const b = el('button', 'older', `Раньше: показать ещё ${Math.min(FEED_CHUNK, from)} из ${from}`);
     b.onclick = () => {
       const f = $('#feed');
-      S.scrollKeep = { h: f.scrollHeight, t: f.scrollTop };   // подгружаем сверху — позицию держим
-      S.feedFrom = Math.max(0, from - FEED_CHUNK);
+      S.scrollKeep = { h: f.scrollHeight, t: f.scrollTop };
+      S.feedFrom = chunkBack(S.messages, from);
       renderFeed();
     };
     fw.append(b);
@@ -520,6 +555,7 @@ function ensureLive() {
   const prov = stepProvider(curChat());
   S.live = el('div', 'turn a', `<div class="who"><span class="av">${agIcon(prov)}</span><b>${agName(prov)}</b></div><div class="md live-md"><span class="typing"><i></i><i></i><i></i></span></div>`);
   S.live.dataset.buf = '';
+  S.live.hidden = S.runs[S.cid]?.phase === 'Работают фоновые задачи';
   $('#fw').append(S.live);
   return S.live;
 }
@@ -549,7 +585,6 @@ function updateToBottom() {
 const rememberChat = id => {
   if (!id) return;
   const f = $('#feed'), inp = $('#inp');
-  // запоминаем отступ от низа: он не ломается, когда старые сообщения подгружены окном
   S.chatState.set(id, { fromBottom: f.scrollHeight - f.scrollTop, draft: inp.value });
   persistDrafts();
   const messages = S.messages.slice();
@@ -564,7 +599,6 @@ const restoreFeed = () => {
   });
 };
 
-/* ───────── запросы разрешений ───────── */
 function showApproval(a) {
   if (document.querySelector(`.appr[data-id="${CSS.escape(a.id)}"]`)) return;
   const atBottom = nearBottom();
@@ -591,15 +625,15 @@ async function refetchTail() {
   } catch { }
 }
 
-/* ───────── шапка и композер ───────── */
-// Пока чат не создан, кнопки композера правят черновик — с ним чат и родится
 const draft = () => {
   const preferred = S.prefs?.provider || 'claude';
+  const provider = agents().includes(preferred) ? preferred : (agents()[0] ?? preferred);
+  const own = provider === preferred;
   return S.draft ??= {
-    provider: agents().includes(preferred) ? preferred : (agents()[0] ?? preferred),
-    model: S.prefs?.model || '',
+    provider,
+    model: own ? S.prefs?.model || '' : '',
     permission_mode: S.prefs?.permission_mode || 'manual',
-    effort: S.prefs?.effort || '',
+    effort: own ? S.prefs?.effort || '' : '',
   };
 };
 const resetDraft = () => { S.draft = null; };
@@ -610,9 +644,9 @@ const setSettings = patch => {
   Object.assign(draft(), patch); renderHead();
 };
 const curProvider = () => settingsOf().provider ?? 'claude';
+const rstText = l => l.resets ? `сброс ${l.resets}` : 'сброшен';
 const metersOf = p => S.meters?.[p ?? curProvider()] ?? null;
 const lvl = p => (p > 80 ? 'e' : p > 45 ? 'w' : '');
-// подпись «сколько занято и сколько осталось» — одинаково для обоих агентов
 function ctxText(c) {
   if (c?.ctx_over) return 'Старое суммарное значение хода скрыто: оно не является заполнением контекстного окна.';
   if (!c?.ctx_used) return null;
@@ -628,7 +662,6 @@ function ctxBar(c) {
     : `<b>${kt(c.ctx_used)}</b>`;
   return `<span class="sep"></span><span class="g" title="${esc(t)}"><span class="k">ctx</span>${body}</span>`;
 }
-// Режим команды: агент текущего (или последнего) шага и его контекст — из хода, а не из чата
 const teamChat = c => !!c?.team && !!S.team?.roles?.length;
 const stepProvider = c => (teamChat(c) && S.runs?.[c.id]?.provider) || c?.provider || 'claude';
 function ctxView(c) {
@@ -637,19 +670,19 @@ function ctxView(c) {
   return { ...c, ctx_used: r.ctx_used, ctx_window: r.ctx_window || 0, ctx_over: false, ctx_exact: true,
     ctx_pct: r.ctx_window ? Math.min(100, Math.round(r.ctx_used / r.ctx_window * 100)) : null };
 }
-// Участники команды с входом — по одному разу, в порядке ролей
 const teamProviders = () => [...new Set((S.team?.roles ?? []).map(r => r.provider))].filter(p => !S.team?.off?.includes(p) && agents().includes(p));
-// Самый занятый из лимитов «5 ч» и «неделя» — его и показываем в компактном чипе
+const isSession = l => /^Сессия/.test(l.label);
+const limRank = l => isSession(l) ? 0 : /^Неделя|дн\.$/.test(l.label) ? 1 : /^Месяц/.test(l.label) ? 2 : 3;
+const orderLimits = (lim = []) => [...lim].sort((a, b) => limRank(a) - limRank(b));
 function worstLimit(p) {
   const lim = metersOf(p)?.limits ?? [];
-  const pick = [lim.find(l => /5 ч|Сесси/.test(l.label)), lim.find(l => /все модели/.test(l.label)) ?? lim.find(l => /Недел/.test(l.label)), lim.find(l => /Месяц/.test(l.label))].filter(Boolean);
-  return pick.sort((a, b) => b.pct - a.pct)[0] ?? null;
+  return lim.find(isSession) ?? lim.find(l => /все модели/.test(l.label)) ?? lim.find(l => /Недел/.test(l.label)) ?? lim.find(l => /Месяц/.test(l.label)) ?? lim[0] ?? null;
 }
 function renderTeamLimits(chip, c) {
   const step = stepProvider(c), running = isRunning(c.id);
   const one = p => {
     const w = worstLimit(p), all = metersOf(p)?.limits ?? [];
-    const tip = `${agName(p)}: ` + (all.length ? all.map(l => `${l.label} — ${l.pct}%, сброс ${l.resets}`).join('; ') : 'нет данных о лимитах');
+    const tip = `${agName(p)}: ` + (all.length ? all.map(l => `${l.label} — ${l.pct}%, ${rstText(l)}`).join('; ') : 'нет данных о лимитах');
     return `<span class="g tm${running && p === step ? ' on' : ''}" data-p="${p}" title="${esc(tip)}">${agIcon(p)}`
       + (w ? `<span class="lb"><i class="${lvl(w.pct)}" style="--p:${Math.min(w.pct, 100)}%"></i></span><b>${w.pct}%</b>` : '<b>—</b>') + '</span>';
   };
@@ -665,17 +698,17 @@ function renderLimits() {
   const lim = m?.limits ?? [];
   if (!lim.length && !c) { chip.hidden = true; return; }
   chip.hidden = false;
-  const short = l => /5 ч|Сесси/.test(l.label) ? '5ч' : /Месяц/.test(l.label) ? 'мес' : 'нед';
-  const bar = l => `<span class="g" title="${esc(l.label)} · сброс ${esc(l.resets)}"><span class="k">${short(l)}</span><span class="lb"><i class="${lvl(l.pct)}" style="--p:${Math.min(l.pct, 100)}%"></i></span><b>${l.pct}%</b></span>`;
-  const five = lim.find(l => /5 ч|Сесси/.test(l.label));
+  const hours = l => l.label.match(/(\d+) ч/)?.[1];
+  const short = l => isSession(l) ? (hours(l) ? hours(l) + 'ч' : 'сес') : /Месяц/.test(l.label) ? 'мес' : 'нед';
+  const bar = l => `<span class="g lim${isSession(l) ? ' session' : ''}" title="${esc(l.label)} · ${esc(rstText(l))}"><span class="k">${short(l)}</span><span class="lb"><i class="${lvl(l.pct)}" style="--p:${Math.min(l.pct, 100)}%"></i></span><b>${l.pct}%</b></span>`;
+  const five = lim.find(isSession);
   const week = lim.find(l => /все модели/.test(l.label)) ?? lim.find(l => /Недел/.test(l.label));
   const month = lim.find(l => /Месяц/.test(l.label));
   chip.innerHTML = (five ? bar(five) : '') + (week ? bar(week) : '') + (month ? bar(month) : '') + ctxBar(c);
-  chip.hidden = !chip.innerHTML;   // у агента без лимитов и без контекста пустой чип не показываем
+  chip.hidden = !chip.innerHTML;
   chip.title = `Показатели ${agName(curProvider())} · ${modelName(curProvider(), settingsOf().model)}`;
+  fitTop();
 }
-// Для новой работы доступны только агенты с действующим входом.
-// Старые чаты отключённого агента остаются в истории, но запустить его нельзя.
 const agents = () => ['claude', 'codex', 'kimi'].filter(p => S.models?.ready?.[p]);
 function applyModels(models) {
   S.models = models;
@@ -700,15 +733,34 @@ function renderTeamBtn() {
   ['claude', 'codex', 'kimi'].forEach((p, i) => b.querySelector(`.d${i + 1}`)?.classList.toggle('off', !!S.team?.off?.includes(p)));
   b.title = on ? 'Команда включена: ведущий составит план, шаги пойдут по ролям. Нажми — выключить для этого чата' : 'Команда агентов выключена — работает один агент. Нажми — включить для этого чата';
 }
+const fitSteps = (el, box, steps) => {
+  el.classList.remove(...steps);
+  const over = () => box.scrollWidth > box.clientWidth + 1;
+  for (const s of steps) { if (!over()) break; el.classList.add(s); }
+};
+const CB_STEPS = ['c1', 'c2', 'tight', 'tighter', 'tightest'];
+function fitComposer() {
+  const cb = $('#cb'), bar = cb?.querySelector('.cbar');
+  if (!bar || !cb.offsetParent) return;
+  const xtra = cb.classList.contains('xtra');
+  cb.classList.remove('xtra');
+  fitSteps(cb, bar, CB_STEPS);
+  if (xtra && $('#btn-cfg')?.offsetParent) cb.classList.add('xtra');
+}
+const TOP_STEPS = ['h1', 'h2', 'h3'];
+function fitTop() { const top = $('.top'); if (top?.offsetParent) { fitSteps(top, top, TOP_STEPS); fitRunPill(); } }
+new ResizeObserver(() => fitComposer()).observe($('#cb'));
+new ResizeObserver(() => fitTop()).observe($('.top'));
 function composerBar() {
   renderTeamBtn();
   document.querySelector('.cbar')?.classList.toggle('team', teamOnHere());
   const s2 = settingsOf();
   renderAgentRail();
   const cbtn = $('#btn-gemini');
-  cbtn.hidden = false;   // кнопка ассистента нейтральная: кто отвечает — в настройках
+  cbtn.hidden = false;
   $('#btn-model').textContent = modelName(s2.provider, s2.model);
   $('#btn-perm').textContent = permName(s2.permission_mode);
+  $('#btn-perm').dataset.short = String(permName(s2.permission_mode) || '').split(' · ')[0];
   const list = effortsFor(s2.provider, s2.model);
   $('#btn-effort').hidden = !list.length;
   const def = defaultEffortName(s2.provider, s2.model);
@@ -717,14 +769,15 @@ function composerBar() {
     : (def ? `${def} ·` : 'скорость');
   $('#btn-effort').classList.toggle('dim', !s2.effort);
   ctxDot();
+  fitComposer();
 }
-// Кольцо рядом с моделью: сразу видно, насколько чат забит
 function ctxDot() {
   const dot = $('#btn-ctxdot'), c = ctxView(curChat());
   const used = c?.ctx_used ?? 0, win = c?.ctx_window ?? 0;
-  // Сумма входных токенов всего хода может быть больше окна: это не заполнение контекста.
+  const was = dot.hidden;
   if (!c || !used || c.ctx_over) { dot.hidden = true; return; }
   dot.hidden = false;
+  if (was) fitComposer();
   const pct = win ? Math.min(100, c.ctx_pct ?? Math.round(used / win * 100)) : 0;
   dot.className = 'ctxdot' + (win ? (pct > 80 ? ' e' : pct > 50 ? ' w' : '') : ' idle');
   dot.querySelector('.ring').style.setProperty('--v', win ? Math.min(pct, 100) : 0);
@@ -740,8 +793,9 @@ function defaultEffortName(prov, id) {
   return effortsFor(prov, id).find(e => e.id === def)?.name ?? def;
 }
 function renderQueue() {
-  const box = $('#queue'), items = S.queues?.[S.cid] ?? [];
-  box.hidden = !items.length;
+  const box = $('#queue'), all = S.queues?.[S.cid] ?? [];
+  box.hidden = !all.length;
+  const items = S.queueOpen ? all : all.slice(0, 1);
   box.innerHTML = items.map(item => `<div class="qitem" data-id="${item.id}"><span class="qst">${item.status === 'sending' ? 'передаётся' : 'в очереди'}</span><span class="qtext">${esc(item.text || '(вложения)')}</span>${item.error ? `<span class="qerr">${esc(item.error)}</span>` : ''}<button class="sbtn" data-edit aria-label="Изменить ожидающее сообщение">✎</button><button class="sbtn" data-delete aria-label="Удалить ожидающее сообщение">×</button></div>`).join('');
   box.querySelectorAll('.qitem').forEach(row => {
     const id = +row.dataset.id, item = items.find(x => x.id === id);
@@ -750,6 +804,83 @@ function renderQueue() {
     });
     row.querySelector('[data-delete]').onclick = () => api(`/api/queue/${id}`, { method: 'DELETE' }).catch(e => toast(e.message));
   });
+  if (all.length > 1) {
+    const more = el('button', 'qmore', S.queueOpen ? 'свернуть очередь' : `ещё ${all.length - 1} в очереди`);
+    more.type = 'button'; more.setAttribute('aria-expanded', String(S.queueOpen));
+    more.onclick = () => { S.queueOpen = !S.queueOpen; renderQueue(); };
+    box.append(more);
+  }
+}
+
+const TASK_TYPE = { local_agent: 'агент', remote_agent: 'облачный агент', local_workflow: 'workflow', local_bash: 'команда', local_command: 'команда', in_process_teammate: 'участник команды' };
+const TASK_ST = { running: 'работает', done: 'готово', error: 'ошибка', stopped: 'остановлена' };
+const STEP_RU = { Bash: ['выполняет команду', 'команда'], Read: ['читает файлы', 'читает'], Edit: ['правит файлы', 'правит'], MultiEdit: ['правит файлы', 'правит'],
+  Write: ['создаёт файл', 'пишет'], NotebookEdit: ['правит блокнот', 'правит'], Grep: ['ищет по коду', 'ищет'], Glob: ['ищет файлы', 'ищет файлы'], LS: ['смотрит папку', 'смотрит'],
+  WebFetch: ['открывает страницу', 'открывает'], WebSearch: ['ищет в интернете', 'ищет в сети'], Agent: ['запускает помощника', 'помощник'], Task: ['запускает помощника', 'помощник'],
+  Workflow: ['запускает workflow', 'workflow'], TodoWrite: ['обновляет план', 'план'], Skill: ['применяет навык', 'навык'], ToolSearch: ['подбирает инструменты', 'инструменты'] };
+function stepRu(s) {
+  s = String(s || '').trim();
+  if (!s) return '';
+  const m = s.match(/^([A-Za-z_]+)(?:\s{2,}([\s\S]*))?$/);
+  const ru = m && (STEP_RU[m[1]] || (m[1].startsWith('mcp__') ? ['вызывает внешний инструмент', 'инструмент'] : null));
+  if (!ru) return s;
+  return m[2] ? `${ru[1]}: ${m[2]}` : ru[0];
+}
+const clock = ms => { const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s2 = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${s2}` : `${m}:${s2}`; };
+const taskMs = (t, cid) => t.status === 'running' ? t.duration_ms + (Date.now() - (S.tasksAt[cid] ?? Date.now())) : t.duration_ms;
+const BGT_WIDE = 1080;
+const wideTasks = () => { const m = $('.main'); return !!m && !m.classList.contains('split') && m.clientWidth >= BGT_WIDE; };
+const tasksOpen = () => { const v = localStorage.getItem('depo.tasksOpen'); return v === null ? wideTasks() : v === '1'; };
+function renderTasks() {
+  const box = $('#bgt'), cid = S.cid;
+  const list = (cid && S.view !== 'dash' && isRunning(cid) ? S.tasks[cid] : null) ?? [];
+  box.hidden = !list.length;
+  const wide = !!list.length && wideTasks();
+  $('.main').classList.toggle('bgt-wide', wide);
+  $('.main').classList.toggle('bgt-side', wide && tasksOpen());
+  if (!list.length) { box.innerHTML = ''; return; }
+  const live = list.filter(t => t.status === 'running').sort((a, b) => a.started_at - b.started_at);
+  const done = list.filter(t => t.status !== 'running').sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0));
+  const open = tasksOpen(), now = live[0];
+  box.classList.toggle('open', open);
+  const kindOf = t => [TASK_TYPE[t.type] || 'задача', t.agent && t.agent !== t.type && t.agent !== 'general-purpose' ? t.agent : ''].filter(Boolean).join(' · ');
+  const nowLine = t => { const l = stepRu(t.last); return l && l !== t.desc ? l : ''; };
+  const row = t => {
+    const st = t.stopping ? 'останавливается' : TASK_ST[t.status] || t.status;
+    const line = t.status === 'running' ? nowLine(t) : '';
+    const tip = [t.desc, kindOf(t), st, t.summary, t.note].filter(Boolean).join('\n');
+    return `<div class="bgt-it s-${esc(t.status)}" data-id="${esc(t.id)}" title="${esc(tip)}">
+      <div class="bgt-r1"><span class="bgt-mark" aria-label="${esc(st)}"></span><span class="bgt-desc">${esc(t.desc || 'Без описания')}</span>
+        <span class="bgt-tm" data-tid="${esc(t.id)}">${clock(taskMs(t, cid))}</span>
+        ${t.status === 'running' && !t.stopping ? `<button type="button" class="sbtn bgt-stop" data-stop="${esc(t.id)}" aria-label="Остановить задачу «${esc(t.desc || '')}»" title="Остановить только эту задачу">■</button>` : ''}</div>
+      ${t.status === 'running' ? `<div class="bgt-last">${esc(kindOf(t))}${line ? ' · ' + esc(line) : t.stopping ? ' · останавливается' : ''}</div>` : ''}
+      ${t.note ? `<div class="bgt-note">${esc(t.note)}</div>` : ''}</div>`;
+  };
+  const head = live.length ? `${live.length} из ${list.length}` : `все ${list.length} готовы`;
+  const short = live.length ? `${live.length}/${list.length}` : `✓ ${list.length}`;
+  box.innerHTML = `<button type="button" class="bgt-hd" aria-expanded="${open}" aria-controls="bgt-list" title="${open ? 'Свернуть' : 'Показать, кто что делает'}">
+      <span class="bgt-dot${live.length ? ' on' : ''}" aria-hidden="true"></span><b>Фоновые задачи</b><span class="bgt-cnt" data-short="${short}">${head}</span>
+      <span class="bgt-now">${!open && now ? esc(nowLine(now) || now.desc || '') : ''}</span><span class="bgt-chev" aria-hidden="true"></span></button>
+    <div class="bgt-list" id="bgt-list" ${open ? '' : 'hidden'}>
+      ${live.map(row).join('')}
+      ${done.length ? `<button type="button" class="bgt-done" aria-expanded="${!!S.tasksDoneOpen}">Готово: ${done.length}${done.some(t => t.status === 'error') ? ' · есть ошибки' : ''}<span class="bgt-chev" aria-hidden="true"></span></button>
+        ${S.tasksDoneOpen ? done.map(row).join('') : ''}` : ''}
+    </div>`;
+  box.querySelector('.bgt-hd').onclick = () => { localStorage.setItem('depo.tasksOpen', open ? '0' : '1'); renderTasks(); };
+  box.querySelector('.bgt-done')?.addEventListener('click', () => { S.tasksDoneOpen = !S.tasksDoneOpen; renderTasks(); });
+  box.querySelectorAll('[data-stop]').forEach(b => b.onclick = () => {
+    const t = list.find(x => x.id === b.dataset.stop);
+    confirmBox(`Остановить «${t?.desc || 'задачу'}»?`, 'Остальные задачи и сам ход продолжат работу.', 'Остановить', () => stopTask(cid, b.dataset.stop));
+  });
+}
+function stopTask(cid, id) {
+  return api(`/api/chats/${cid}/tasks/${encodeURIComponent(id)}/stop`, { method: 'POST' }).catch(e => toast(e.message));
+}
+{ let was = null; new ResizeObserver(() => { const w = wideTasks(); if (w !== was) { was = w; renderTasks(); } }).observe($('.main')); }
+function tickTasks() {
+  const list = S.tasks[S.cid];
+  if (!list?.length) return;
+  $('#bgt').querySelectorAll('.bgt-tm').forEach(n => { const t = list.find(x => x.id === n.dataset.tid); if (t?.status === 'running') n.textContent = clock(taskMs(t, S.cid)); });
 }
 async function runSummaryDialog() {
   const c = curChat(), current = c && S.runs[c.id];
@@ -777,12 +908,12 @@ function renderRunState(c = curChat()) {
   if (!c) return;
   const running = isRunning(c.id), run = S.runs[c.id], st = $('#chip-state');
   const quota = runQuota(run);
-  // в шапке — только огонёк и время; что именно делает агент — строкой над полем ввода
   $('#state-text').textContent = running ? (run ? duration(activeMs(run)) : 'работает') : STATE_RU[c.state] || c.state;
+  st.classList.toggle('idle', !running);
   const rl = $('#runline');
   rl.hidden = !running;
+  if (S.live && c.id === S.cid) S.live.hidden = running && run?.phase === 'Работают фоновые задачи' && !S.live.dataset.buf;
   if (running) {
-    // команда: кто из агентов и какой шаг сейчас
     const tj = S.messages.filter(x => x.kind === 'team_plan').at(-1)?.json;
     const ts = tj && tj.status === 'running' ? tj.steps?.[tj.step] : tj?.status === 'planning' ? { provider: tj.steps?.[0]?.provider, title: 'составляет план' } : null;
     $('#rl-phase').textContent = (ts ? `${agName(ts.provider)} · ${ts.title}` : (run?.phase || 'Работает')) + '…';
@@ -793,15 +924,16 @@ function renderRunState(c = curChat()) {
   st.setAttribute('aria-label', st.title);
 }
 function renderHead() {
-  $('#runline').hidden = !(S.view !== 'dash' && S.cid && isRunning(S.cid));   // строка хода — только у работающего чата
+  $('#runline').hidden = !(S.view !== 'dash' && S.cid && isRunning(S.cid));
   renderLimits();
   composerBar();
   renderQueue();
+  renderTasks();
   const c = curChat(), p = curProject();
   const has = !!c;
   const dash = S.view === 'dash';
   document.body.dataset.view = S.view;
-  document.body.dataset.chat = !dash && has ? '1' : '0';   // на телефоне с открытым чатом нижняя навигация прячется
+  document.body.dataset.chat = !dash && has ? '1' : '0';
   document.querySelectorAll('#bnav [data-nav]').forEach(b => b.setAttribute('aria-current', String(b.dataset.nav === (dash ? 'dash' : 'chat'))));
   $('#dash').hidden = !dash;
   if (dash) {
@@ -809,7 +941,7 @@ function renderHead() {
     $('#pane2').hidden = true;
     $('#chip-state').hidden = true; $('#chip-gauge').hidden = true; $('#chip-files').hidden = true; $('#chip-split').hidden = true;
     $('#ctitle').textContent = 'Главная';
-    $('#csub').textContent = [S.host?.name, new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })].filter(Boolean).join(' · ');
+    $('#csub').textContent = [hostLabel(), new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })].filter(Boolean).join(' · ');
     renderRunPill();
     return;
   }
@@ -844,8 +976,9 @@ function renderHead() {
   modeBtn.innerHTML = team
     ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h11M11 7l5 5-5 5"/></svg>'
     : (S.sendMode === 'after' ? 'После задачи' : 'Передать сейчас');
+  if (team) delete modeBtn.dataset.short; else modeBtn.dataset.short = S.sendMode === 'after' ? 'После' : 'Сейчас';
   const modeName = S.sendMode === 'after' ? 'После задачи' : 'Передать сейчас';
-  modeBtn.title = (team ? modeName + ' · ' : '') + (S.steering[c.provider] ? 'Как передать уточнение' : `${agName(c.provider)}: только после текущего хода`);   // в команде кнопка — значок, режим видно в подсказке
+  modeBtn.title = (team ? modeName + ' · ' : '') + (S.steering[c.provider] ? 'Как передать уточнение' : `${agName(c.provider)}: только после текущего хода`);
   modeBtn.setAttribute('aria-label', team ? 'Режим передачи уточнения' : modeBtn.textContent);
   $('#ctitle').textContent = c.title;
   $('#csub').textContent = `${p.short} · ${plural(c.turns, ['ход', 'хода', 'ходов'])}${c.cost_usd ? ' · $' + c.cost_usd.toFixed(3) : ''}`;
@@ -854,18 +987,23 @@ function renderHead() {
   renderRunState(c);
   $('#cb').classList.toggle('run', run);
   $('#csub').textContent += c.origin === 'claude' ? ' · из Claude Code' : '';
-  const snd = $('#btn-send');
-  snd.classList.toggle('stop', run);
-  snd.setAttribute('aria-label', run ? 'Остановить' : 'Отправить');
-  snd.innerHTML = run
-    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>'
-    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  syncSendBtn();
   $('#inp').placeholder = run ? 'Дополнить запрос на ходу…' : 'Что сделать в этом проекте?';
   renderRunPill();
 }
-function renderAll() { renderRail(); renderSide(); renderHead(); }
+const sendIsStop = () => isRunning(S.cid) && !$('#inp').value.trim() && !S.atts.length;
+function syncSendBtn() {
+  const snd = $('#btn-send'), stopNow = sendIsStop();
+  if (snd.dataset.mode === (stopNow ? 'stop' : 'send')) return;
+  snd.dataset.mode = stopNow ? 'stop' : 'send';
+  snd.classList.toggle('stop', stopNow);
+  snd.setAttribute('aria-label', stopNow ? 'Остановить' : 'Отправить');
+  snd.innerHTML = stopNow
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>'
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+}
+function renderAll() { renderRail(); renderSide(); renderHead(); fitComposer(); fitTop(); }
 
-/* ───────── выбор ───────── */
 async function selectProject(id, { keepChat = false } = {}) {
   S.pid = id; closeFly();
   if (!keepChat) {
@@ -882,14 +1020,13 @@ async function selectChat(id) {
   S.cid = id; S.live = null;
   const cached = S.history.get(id);
   S.messages = cached ? cached.slice() : [];
-  S.feedFrom = Math.max(0, S.messages.length - FEED_CHUNK);
+  S.feedFrom = chunkBack(S.messages, S.messages.length);
   const input = $('#inp');
   input.value = S.chatState.get(id)?.draft ?? '';
   autosize();
   renderAll(); if (cached) renderFeed();
   if (!id) return;
   try {
-    // Один запрос на чат; кэш рисуется синхронно, сеть лишь сверяет актуальность.
     const pending = S.loadingChats.get(id) ?? api(`/api/chats/${id}/messages`).finally(() => S.loadingChats.delete(id));
     S.loadingChats.set(id, pending);
     const d = await pending;
@@ -898,21 +1035,20 @@ async function selectChat(id) {
     S.messages = d.messages;
     S.history.delete(id); S.history.set(id, d.messages.slice());
     while (S.history.size > 8) S.history.delete(S.history.keys().next().value);
-    S.feedFrom = Math.min(S.feedFrom, Math.max(0, d.messages.length - FEED_CHUNK));
+    S.feedFrom = Math.min(S.feedFrom, chunkBack(d.messages, d.messages.length));
     upsertChat({ ...d.chat, unread: false });
     if (d.running && !S.running.includes(id)) S.running.push(id);
     S.queues[id] = d.queue ?? [];
+    S.tasks[id] = d.tasks ?? []; S.tasksAt[id] = Date.now();
     if (d.run) S.runs[id] = d.run;
     S.steering[d.chat.provider] = d.can_steer;
     S.pid = d.chat.project_id;
-    renderAll(); if (!sameFeed) renderFeed();   // кэш совпал с сетью — не дёргаем ленту повторно
+    renderAll(); if (!sameFeed) renderFeed();
     loadChatContext(id);
     prefetchNeighbors(id);
   } catch (e) { toast(e.message); }
   save();
 }
-// Фоново подтягиваем соседние чаты, чтобы переключение было мгновенным.
-// Непрочитанные не трогаем: открытие сбрасывает unread, а это должен делать сам владелец.
 function prefetchNeighbors(id) {
   const list = chatsOf(S.pid).filter(c => !c.archived);
   const i = list.findIndex(c => c.id === id);
@@ -930,8 +1066,6 @@ function prefetchNeighbors(id) {
 }
 const save = () => { try { localStorage.setItem('depo.sel', JSON.stringify({ pid: S.pid, cid: S.cid, view: S.view })); } catch { } };
 
-/* ───────── главная страница ───────── */
-// Дашборд — точка входа. Живёт на том же SSE, что и чаты: никакого своего опроса.
 async function openDash() {
   S.view = 'dash';
   mmark('dash');
@@ -943,7 +1077,6 @@ async function openDash() {
     if (S.view === 'dash') renderDash();
   } catch (e) { toast(e.message); }
 }
-// События прилетают часто — сводку перечитываем не чаще, чем раз в полсекунды, и только пока главная открыта.
 let dashTimer = null;
 function dashRefresh() {
   if (S.view !== 'dash') return;
@@ -954,7 +1087,7 @@ function dashRefresh() {
 }
 async function openDashProject(pid) {
   const p = S.dash?.projects?.find(x => x.id === pid);
-  if (isPhone()) { S.pid = pid; save(); return mgo('chats'); }   // на телефоне — сначала чаты проекта
+  if (isPhone()) { S.pid = pid; save(); return mgo('chats'); }
   if (p?.last_chat) await selectChat(p.last_chat.id);
   else await selectProject(pid);
 }
@@ -978,7 +1111,6 @@ function renderDashServer(s = S.dash?.server) {
   const box = $('#dash-server');
   if (!box || S.view !== 'dash') return;
   if (!s) { box.innerHTML = '<div class="dempty">Нет данных о сервере.</div>'; return; }
-  // одна сетка на все строки: полосы одной длины, значения по правому краю
   const row = (label, pct, val) => `<b>${label}</b><span class="g ${lvl(pct)}"><i style="width:${Math.min(pct, 100)}%"></i></span><span class="v">${esc(val)}</span>`;
   const line = (label, val) => `<b>${label}</b><span class="v wide">${esc(val)}</span>`;
   const memPct = s.mem_total ? Math.round(s.mem_used / s.mem_total * 100) : 0;
@@ -987,11 +1119,10 @@ function renderDashServer(s = S.dash?.server) {
     ${row('CPU', s.cpu_pct, `${s.cpu_pct}% · ${s.load} / ${s.cpus} ядра`)}
     ${row('RAM', memPct, `${gb(s.mem_used)} из ${gb(s.mem_total)} ГБ`)}
     ${s.disk_total != null ? row('Диск', diskPct, `свободно ${gb(s.disk_free)} из ${gb(s.disk_total)} ГБ`) : ''}
-    ${line('Малина', [s.temp_c != null ? `${s.temp_c}°C` : null, `аптайм ${upText(s.uptime_s)}`].filter(Boolean).join(' · '))}
+    ${line(esc(srvName() || 'Сервер'), [s.temp_c != null ? `${s.temp_c}°C` : null, `аптайм ${upText(s.uptime_s)}`].filter(Boolean).join(' · '))}
     ${line('Depo', `работает · ${mb(s.proc.rss)} МБ · ${upText(s.proc.uptime_s)}`)}
   </div></div>`;
 }
-// редкий опрос состояния машины — только пока открыта главная и вкладка видима
 async function loadServerStats() {
   try { const s = await api('/api/server'); if (S.dash) S.dash.server = s; renderDashServer(s); } catch { }
 }
@@ -1015,7 +1146,6 @@ function renderDashActive(d = S.dash) {
   }).join('') + '</div>';
   box.querySelectorAll('[data-chat]').forEach(b => b.onclick = () => selectChat(b.dataset.chat));
 }
-// Таймеры активных задач тикают локально из started_at — сервер ради этого не дёргаем.
 function tickDash() {
   if (S.view !== 'dash' || !S.dash) return;
   for (const a of S.dash.active ?? []) {
@@ -1026,11 +1156,11 @@ function tickDash() {
 function renderDashMeters(d = S.dash) {
   if (!d) return;
   $('#dash-meters').innerHTML = ['claude', 'codex', 'kimi', 'gemini'].map(p => {
-    const lims = d.meters?.[p]?.limits ?? [];
+    const lims = orderLimits(d.meters?.[p]?.limits ?? []);
     const acc = d.providers?.find(x => x.id === p)?.current;
     const rows = lims.map(l => `<div class="lmr"><div class="lb">${esc(l.label)}<span class="p">${l.pct}<small>%</small></span></div>
       <div class="g ${lvl(l.pct)}"><i style="width:${Math.min(l.pct, 100)}%"></i></div>
-      <div class="rst" title="использовано ${l.pct}% · свободно ${Math.max(0, 100 - l.pct)}% · сброс ${esc(l.resets)}"><span>осталось ${Math.max(0, 100 - l.pct)}%</span><span class="r">сброс ${esc(String(l.resets).replace(/(\d+ дн\.? \d+ ч) \d+ мин/, '$1'))}</span></div></div>`).join('');
+      <div class="rst" title="использовано ${l.pct}% · свободно ${Math.max(0, 100 - l.pct)}% · ${esc(rstText(l))}"><span>осталось ${Math.max(0, 100 - l.pct)}%</span><span class="r">${esc(rstText(l).replace(/(\d+ дн\.? \d+ ч) \d+ мин/, '$1'))}</span></div></div>`).join('');
     return `<div class="dcard"><span class="dh">${agIcon(p)}<b>${esc(agName(p))}</b>${acc?.ok ? '' : '<span class="dtag">нужен вход</span>'}</span>
       ${rows ? `<span class="dlm">${rows}</span>` : `<span class="ds">${!acc?.ok ? 'Войди в настройках, чтобы видеть лимиты.' : p === 'gemini' ? 'Подключён. Gemini CLI не сообщает лимиты — их видно только в аккаунте Google.' : 'Данных о лимитах пока нет — появятся после первого хода этого агента.'}</span>`}</div>`;
   }).join('');
@@ -1062,11 +1192,10 @@ function renderDashProviders(d = S.dash) {
     const worst = Math.max(0, ...lims.map(l => l.pct));
     const st = !p.current?.ok ? ['err', 'Требуется вход']
       : worst >= 95 ? ['warn', 'Лимит почти исчерпан']
-        : ['ok', 'Подключён'];   // подробности (почта, тариф) — в настройках
+        : ['ok', 'Подключён'];
     return `<div class="dprov"><b>${agIcon(p.id)}${esc(agName(p.id))}</b><span>${esc(st[1])}</span><span class="led ${st[0]}"></span></div>`;
   }).join('') + '</div>';
 }
-// Мини-панель: агент работает, пока ты в другом чате или разделе. На главной не нужна — там и так список.
 function renderRunPill() {
   const pill = $('#runpill');
   const others = S.view === 'dash' ? [] : S.running.filter(id => id !== S.cid && isRunning(id));
@@ -1081,9 +1210,15 @@ function renderRunPill() {
     pill.title = 'Работают другие задачи — выбрать';
     pill.innerHTML = `<span class="led"></span><span class="n">Работают ещё ${plural(others.length, ['задача', 'задачи', 'задач'])}</span><span class="tm">${others.length}</span>`;
   }
+  fitRunPill();
+}
+function fitRunPill() {
+  const pill = $('#runpill'), n = pill?.querySelector('.n');
+  if (!n || pill.hidden) return;
+  pill.classList.remove('bare');
+  if (n.offsetParent && n.clientWidth < 40) pill.classList.add('bare');
 }
 
-/* ───────── отправка ───────── */
 async function send(forced, { force = false } = {}) {
   const inp = $('#inp');
   const text = (forced ?? inp.value).trim();
@@ -1104,7 +1239,6 @@ async function send(forced, { force = false } = {}) {
   const oldAtts = S.atts;
   const ready = oldAtts.filter(a => a.done).map(a => a.meta);
   if (!forced) inp.value = '', autosize();
-  // отправленное — уже не черновик: иначе при возврате во вкладку старый текст всплывает снова
   const setDraft = t => { S.chatState.set(cid, { ...(S.chatState.get(cid) ?? {}), draft: t }); persistDrafts(); };
   if (!forced) setDraft('');
   S.atts = []; renderAtts();
@@ -1120,6 +1254,7 @@ async function send(forced, { force = false } = {}) {
     const busy = e.data?.busy;
     if (busy) return confirmBox('В проекте уже работает агент', `${e.message} Запустить всё равно или дождаться?`, 'Запустить параллельно',
       () => send(forced, { force: true }), false);
+    if (e.data?.fix_owner) return ownerToast(e.message, e.data.fix_owner, () => send(forced, { force }));
     toast(e.message);
   }
 }
@@ -1131,17 +1266,15 @@ function autosize() {
   const t = $('#inp');
   t.style.height = 'auto';
   t.style.height = Math.min(t.scrollHeight, 260) + 'px';
+  syncSendBtn();
 }
 function resizeCompose(t) {
   if (t.id === 'inp') return autosize();
   t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px';
 }
 
-/* ───────── поток событий ───────── */
 function connect() {
   const es = new EventSource('/api/stream');
-  // После обрыва сверяемся с сервером: пока связи не было, ходы могли закончиться или начаться,
-  // а очередь — уйти. Без этого «Передать сейчас» уходило в чат, который на деле уже стоял.
   let lost = false;
   const onOpen = () => { setOffline(false); if (lost) { lost = false; resync(); } };
   es.addEventListener('open', onOpen);
@@ -1150,13 +1283,13 @@ function connect() {
   es.addEventListener('message', e => {
     const d = JSON.parse(e.data);
     if (d.chat_id === S.cid) appendMessage(d.message);
-    if (P2.on && d.chat_id === P2.cid) { P2.messages.push(d.message); P2.live = ''; renderSecond(); }
     touchChat(d.chat_id);
   });
-  es.addEventListener('delta', e => { const d = JSON.parse(e.data); onDelta(d); if (P2.on && d.chat_id === P2.cid && d.text) { P2.live += d.text; renderSecond(); } });
-  es.addEventListener('message-patch', e => { const d = JSON.parse(e.data); patchMessage(d); if (P2.on && d.chat_id === P2.cid) renderSecond(); });
+  es.addEventListener('delta', e => onDelta(JSON.parse(e.data)));
+  es.addEventListener('message-patch', e => patchMessage(JSON.parse(e.data)));
   es.addEventListener('voice-text', e => V.onText?.(JSON.parse(e.data)));
   es.addEventListener('assistant-text', e => asstOnText(JSON.parse(e.data)));
+  es.addEventListener('assistant-sent', e => { const d = JSON.parse(e.data); if (AS.open && d.id === AS.sid) asstSent(d.sent); });
   es.addEventListener('team-config', e => { S.team = JSON.parse(e.data).config; renderTeamBtn(); renderLimits(); });
   es.addEventListener('cliupd', () => { if (CU.box?.isConnected) loadCliUpd(); });
   es.addEventListener('models', () => { refreshModels().catch(() => { }); });
@@ -1166,6 +1299,7 @@ function connect() {
     if (d.status === 'running') { if (!S.running.includes(d.chat_id)) S.running.push(d.chat_id); }
     else {
       S.running = S.running.filter(x => x !== d.chat_id);
+      delete S.tasks[d.chat_id];
       const c = chatOf(d.chat_id);
       if (c) Object.assign(c, {
         unread: d.chat_id === S.cid && document.visibilityState === 'visible' ? false : !!d.unread,
@@ -1177,7 +1311,6 @@ function connect() {
       if (d.chat_id === S.cid && S.live) { S.live.remove(); S.live = null; }
       if (S.ctx) delete S.ctx[d.chat_id];
       if (d.chat_id === S.cid) loadChatContext(d.chat_id, { force: true });
-      if (P2.on && d.chat_id === P2.cid) renderSecond();
       const teamLive = d.chat_id === S.cid && ['planning', 'await', 'running'].includes(S.messages.filter(x => x.kind === 'team_plan').at(-1)?.json?.status);
       if (d.chat_id !== S.cid && d.status === 'done' && !chatOf(d.chat_id)?.team) notifyDone(d.chat_id);
       if (d.chat_id === S.cid && d.status === 'done' && !teamLive) {
@@ -1193,7 +1326,6 @@ function connect() {
   es.addEventListener('run-progress', e => {
     const d = JSON.parse(e.data); S.runs[d.chat_id] = d.run;
     if (d.chat_id === S.cid) { renderRunState(); if (teamChat(curChat())) { renderLimits(); ctxDot(); } }
-    if (P2.on && d.chat_id === P2.cid) renderSecond();
     if (S.view === 'dash' && S.dash) {
       const a = (S.dash.active ?? []).find(x => x.chat.id === d.chat_id);
       if (a) { a.run = d.run; renderDashActive(); }
@@ -1218,7 +1350,11 @@ function connect() {
     const { project } = JSON.parse(e.data);
     const i = S.projects.findIndex(p => p.id === project.id);
     if (i >= 0) S.projects[i] = project; else S.projects.push(project);
-    renderAll();
+    if (project.archived && S.pid === project.id) {
+      const next = S.projects.filter(p => !p.archived)[0]?.id ?? null;
+      if (isPhone() && document.body.dataset.m === 'projects') { S.pid = next; save(); selectChat(null).then(renderAll); }
+      else selectProject(next);
+    } else renderAll();
     dashRefresh();
   });
   es.addEventListener('project-removed', e => {
@@ -1235,6 +1371,11 @@ function connect() {
     if (S.dash) { S.dash.meters = { ...S.dash.meters, ...d }; renderDashMeters(); renderDashProviders(); }
     renderLimits(); renderRunState(); if (!$('#pop-ctx').hidden) renderCtxPop();
   });
+  es.addEventListener('tasks', e => {
+    const d = JSON.parse(e.data);
+    S.tasks[d.chat_id] = d.tasks; S.tasksAt[d.chat_id] = Date.now();
+    if (d.chat_id === S.cid) renderTasks();
+  });
   es.addEventListener('queue', e => { const d = JSON.parse(e.data); S.queues[d.chat_id] = d.items; if (d.chat_id === S.cid) renderQueue(); });
   es.addEventListener('approval', e => { const a = JSON.parse(e.data); S.approvals.push(a); if (a.chat_id === S.cid) showApproval(a); renderAll();
     sysNotify('Depo · нужен ответ', `${chatOf(a.chat_id)?.title ?? ''}: разрешить ${a.tool_name}?`, a.chat_id); });
@@ -1243,13 +1384,13 @@ function connect() {
   es.addEventListener('prefs', e => { S.prefs = JSON.parse(e.data).prefs; applyFeedPrefs(); });
   es.addEventListener('models', e => applyModels(JSON.parse(e.data)));
   es.addEventListener('link', e => linkPaint(JSON.parse(e.data)));
-  es.addEventListener('chat-appended', e => { const d = JSON.parse(e.data); if (d.chat_id === S.cid) refetchTail(); if (P2.on && d.chat_id === P2.cid) loadSecond(P2.cid); });
+  es.addEventListener('chat-appended', e => { const d = JSON.parse(e.data); if (d.chat_id === S.cid) refetchTail(); });
   return es;
 }
 async function resync() {
   try {
     const d = await api('/api/state');
-    Object.assign(S, { chats: d.chats, running: d.running, queues: d.queues ?? {}, runs: d.runs ?? {}, steering: d.steering ?? S.steering, approvals: d.approvals ?? [] });
+    Object.assign(S, { chats: d.chats, running: d.running, queues: d.queues ?? {}, runs: d.runs ?? {}, tasks: d.tasks ?? {}, tasksAt: Object.fromEntries(Object.keys(d.tasks ?? {}).map(k => [k, Date.now()])), steering: d.steering ?? S.steering, approvals: d.approvals ?? [] });
     if (S.cid && S.view !== 'dash') {
       const keep = $('#inp').value;
       await selectChat(S.cid);
@@ -1281,12 +1422,10 @@ function notifyDone(chatId) {
   t.querySelector('.tx').onclick = () => { selectChat(chatId); t.remove(); };
 }
 
-/* ───────── контекст и лимиты ───────── */
-// Окно лимитов командного чата: контекст работающего агента и полные лимиты каждого участника
 const limRows = lim => lim.map(l =>
   `<div class="lmr"><div class="lb">${esc(l.label)}<span class="p">${l.pct}<small>%</small></span></div>
     <div class="g ${lvl(l.pct)}"><i style="width:${Math.min(l.pct, 100)}%"></i></div>
-    <div class="rs">сброс ${esc(l.resets)}</div></div>`).join('');
+    <div class="rs">${esc(rstText(l))}</div></div>`).join('');
 function renderTeamPop(pop, c) {
   const step = stepProvider(c), v = ctxView(c), run = isRunning(c.id);
   const used = v?.ctx_used ?? 0, win = v?.ctx_window ?? 0, pct = win ? Math.min(100, Math.round(used / win * 100)) : 0;
@@ -1310,7 +1449,7 @@ function renderCtxPop() {
   if (teamChat(c)) return renderTeamPop(pop, c);
   const m = metersOf(prov), lim = m?.limits ?? [];
   const name = agName(prov), model = modelName(prov, settingsOf().model);
-  const det = c ? S.ctx?.[c.id] : null;                  // точная разбивка этого чата
+  const det = c ? S.ctx?.[c.id] : null;
   const used = det?.used ?? c?.ctx_used ?? 0;
   const win = det?.window ?? c?.ctx_window ?? 0;
   const invalid = !!(det?.over || c?.ctx_over);
@@ -1348,7 +1487,6 @@ function renderCtxPop() {
   pop.innerHTML = h;
 }
 
-// Точный контекст запрашиваем только для открытого чата; Codex читает его из своей сессии.
 async function loadChatContext(id, { force = false } = {}) {
   const c = chatOf(id);
   if (!c) return;
@@ -1362,7 +1500,6 @@ async function loadChatContext(id, { force = false } = {}) {
   } catch { }
 }
 
-/* ───────── меню и окна ───────── */
 function closeMenus() { document.querySelectorAll('.menu').forEach(m => m.remove()); }
 function menu(anchor, items) {
   closeMenus();
@@ -1385,7 +1522,6 @@ function menu(anchor, items) {
 function modal(html, { onOpen, wide } = {}) {
   const scrim = el('div', 'scrim' + (wide ? ' wide' : ''));
   scrim.innerHTML = `<div class="modal">${html}</div>`;
-  // на телефоне окно — тоже шаг истории: «назад» закрывает его, а не уходит с экрана
   const pushed = isPhone();
   if (pushed) history.pushState({ ...mst(), modal: 1 }, '');
   let closed = false;
@@ -1444,8 +1580,6 @@ function promptBox(title, sub, value, okText, run) {
   });
 }
 
-// Новый проект: название + где. Где — либо существующая папка («Выбрать»), либо новая папка
-// внутри той, что открыта в проводнике. Проводник ходит только по домашнему каталогу.
 async function newProjectDialog() {
   const slug = v => v.toLowerCase().trim()
     .replace(/[а-яё]/g, c => ({ а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya' }[c] ?? c))
@@ -1464,9 +1598,8 @@ async function newProjectDialog() {
     onOpen(m, close) {
       const name = m.querySelector('#np-name'), err = m.querySelector('#np-err'), create = m.querySelector('#np-create');
       const out = m.querySelector('#np-path'), list = m.querySelector('#np-list'), cur = m.querySelector('#np-cur'), up = m.querySelector('#np-up');
-      let here = null, picked = null;          // here — открытая папка; picked — выбранная существующая
+      let here = null, picked = null;
       const target = () => picked ?? (here && create.checked && slug(name.value) ? here.path.replace(/\/$/, '') + '/' + slug(name.value) : null);
-      // показываем коротко, от домашнего каталога — как его отдаёт сервер
       const short = p => !p ? '—' : here && p.startsWith(here.path) ? (here.short.replace(/\/$/, '') + p.slice(here.path.length)) : p;
       const paint = () => {
         const t = target();
@@ -1479,13 +1612,15 @@ async function newProjectDialog() {
           const d = await api('/api/browse?path=' + encodeURIComponent(p));
           here = d; cur.textContent = d.short; up.disabled = !d.parent;
           list.innerHTML = d.dirs.length ? d.dirs.map(x => `<div class="npdir${x.connected ? ' used' : ''}" data-p="${esc(x.path)}">
-              <button class="go" data-go="${esc(x.path)}">${ICON_DIR}<span class="nm">${esc(x.name)}</span>${x.marks.length ? `<span class="mk">${esc(x.marks.join(' · '))}</span>` : ''}${x.connected ? '<span class="mk">уже проект</span>' : ''}</button>
-              ${x.connected ? '' : `<button class="btn pick" data-pick="${esc(x.path)}" data-n="${esc(x.name)}">Выбрать</button>`}</div>`).join('')
+              <button class="go" data-go="${esc(x.path)}">${ICON_DIR}<span class="nm">${esc(x.name)}</span>${x.marks.length ? `<span class="mk">${esc(x.marks.join(' · '))}</span>` : ''}${x.archived ? '<span class="mk">проект в архиве</span>' : x.connected ? '<span class="mk">уже проект</span>' : ''}</button>
+              ${x.archived ? `<button class="btn pick" data-restore="${x.archived}">Вернуть</button>` : x.connected ? '' : `<button class="btn pick" data-pick="${esc(x.path)}" data-n="${esc(x.name)}">Выбрать</button>`}</div>`).join('')
             : '<p class="sub" style="padding:10px">Подпапок нет — можно создать новую здесь.</p>';
           paint();
         } catch (e) { list.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
       };
       list.addEventListener('click', e => {
+        const rs = e.target.closest('[data-restore]');
+        if (rs) { close(); return restoreProject(+rs.dataset.restore); }
         const pick = e.target.closest('[data-pick]');
         if (pick) {
           picked = picked === pick.dataset.pick ? null : pick.dataset.pick;
@@ -1510,12 +1645,26 @@ async function newProjectDialog() {
           await selectProject(d.project.id);
           if (isPhone()) mgo('chats', 'push');
           toast(`Проект «${d.project.name}» подключён${d.created ? ', папка создана' : ''}`, 'ok', 4000);
-        } catch (e) { err.textContent = e.message; }
+        } catch (e) {
+          err.textContent = e.message;
+          const arch = e.data?.archived;
+          if (arch) {
+            const b = el('button', 'btn do'); b.type = 'button'; b.textContent = `Вернуть «${arch.name}»`;
+            b.onclick = async () => { b.disabled = true; close(); await restoreProject(arch.id); };
+            err.append(' ', b);
+          }
+          const dir = e.data?.fix_owner;
+          if (dir) {
+            const b = el('button', 'btn do'); b.type = 'button'; b.textContent = 'Вернуть себе';
+            b.onclick = async () => { b.disabled = true; if (await fixOwner(dir) !== false) go(); else b.disabled = false; };
+            err.append(' ', b);
+          }
+        }
       };
       m.querySelector('[data-no]').onclick = close;
       m.querySelector('[data-yes]').onclick = go;
       name.onkeydown = e => { if (e.key === 'Enter') go(); };
-      if (!touchOnly()) name.focus();   // на телефоне клавиатура не выскакивает сама — сначала можно выбрать папку
+      if (!touchOnly()) name.focus();
       open('~');
     }
   });
@@ -1532,9 +1681,6 @@ function chatMenu(anchor, c) {
 }
 const patchChat = (id, body) => api(`/api/chats/${id}`, { method: 'PATCH', body }).catch(e => toast(e.message));
 
-// Разговор, начатый в Claude Code на другой машине, поднимается сюда по кнопке.
-// Так постоянное зеркало можно держать выключенным: список чатов не засоряется,
-// а нужный разговор продолжается ровно с того места, где его оставили.
 async function sessionsDialog() {
   const p = curProject(); if (!p) return;
   const close = modal(`<div class="smodal"><h3>Поднять разговор из Claude Code</h3>
@@ -1607,29 +1753,90 @@ async function safetyDialog() {
   });
 }
 
-function projectMenu(anchor) {
-  const p = curProject(); if (!p) return;
+function projectMenu(anchor, p = curProject()) {
+  if (!p) return;
+  const here = p.id === curProject()?.id;
   menu(anchor, [
     { label: p.short },
     { text: 'Переименовать', run: () => promptBox('Переименовать проект', '', p.name, 'Сохранить', v => v && api(`/api/projects/${p.id}`, { method: 'PATCH', body: { name: v } })) },
     { text: 'Сменить значок', run: () => promptBox('Значок проекта', 'Одна-две буквы или эмодзи — например 🚀 или SP. Цвет плитки подбирается по названию.', p.glyph, 'Сохранить', v => v && api(`/api/projects/${p.id}`, { method: 'PATCH', body: { glyph: v } })) },
-    { text: 'Поднять разговор из Claude Code', hint: 'сессии из терминала и с ноутбука', run: sessionsDialog },
+    here && { text: 'Поднять разговор из Claude Code', hint: 'сессии из терминала и с ноутбука', run: sessionsDialog },
     { text: 'Сохранить копию чатов в папку проекта', hint: 'папка .depo рядом с кодом', run: () => api(`/api/projects/${p.id}/snapshot`, { method: 'POST' }).then(d => toast(d.error ? d.error : `Копия обновлена: файлов ${d.written ?? 0}`, d.error ? 'err' : 'ok', 4000)).catch(e => toast(e.message)) },
-    { text: 'Проверки и публикация', hint: 'тесты, целостность сборки, откат', run: safetyDialog },
+    here && { text: 'Проверки и публикация', hint: 'тесты, целостность сборки, откат', run: safetyDialog },
     { text: 'Новый проект', run: newProjectDialog },
-    { text: 'В архив всё старше недели', hint: 'закреплённые и работающие не трогаю', run: () => api(`/api/projects/${p.id}/archive-old`, { method: 'POST', body: { days: 7 } }).then(d => toast(`В архив: ${d.archived}`, 'ok', 3000)).catch(e => toast(e.message)) },
+    { text: 'Чаты старше недели — в архив', hint: 'закреплённые и работающие не трогаю', run: () => api(`/api/projects/${p.id}/archive-old`, { method: 'POST', body: { days: 7 } }).then(d => toast(`В архив: ${d.archived}`, 'ok', 3000)).catch(e => toast(e.message)) },
     '-',
+    { text: 'Проект в архив', hint: 'папка останется на месте, чаты сохранятся', run: () => archiveProject(p) },
     {
       text: 'Отключить проект', danger: true, run: () => confirmBox('Отключить проект?',
         `«${p.name}» пропадёт из Depo вместе со своими чатами. Папка ${p.short} останется на диске нетронутой.`,
         'Отключить', () => api(`/api/projects/${p.id}`, { method: 'DELETE' }).catch(e => toast(e.message)))
     },
-  ]);
+  ].filter(Boolean));
+}
+
+const archivedProjects = () => S.projects.filter(p => p.archived).sort((a, b) => (b.archived_at || 0) - (a.archived_at || 0));
+const chatsWord = n => plural(n, ['чат', 'чата', 'чатов']);
+function archiveProject(p) {
+  const n = chatsOf(p.id).filter(c => !c.archived).length;
+  confirmBox(`Убрать «${p.name}» в архив?`,
+    `Проект пропадёт из колонки, с главной и из сводки ассистента. Папка ${p.short} останется на месте, ${chatsWord(n)} сохранятся. Вернуть — значок архива внизу колонки проектов.`,
+    'В архив', async () => {
+      try {
+        await api(`/api/projects/${p.id}`, { method: 'PATCH', body: { archived: true } });
+        toast(`«${p.name}» в архиве`, 'ok', 7000, { label: 'Вернуть', run: () => restoreProject(p.id) });
+      } catch (e) { toast(e.message, 'err', 8000); }
+    }, false);
+}
+async function restoreProject(id, { open = true } = {}) {
+  try {
+    const d = await api(`/api/projects/${id}`, { method: 'PATCH', body: { archived: false } });
+    const i = S.projects.findIndex(p => p.id === id); if (i >= 0) S.projects[i] = d.project;
+    if (open) { await selectProject(id); if (isPhone()) mgo('chats', 'push'); }
+    toast(`«${d.project.name}» снова в работе`, 'ok', 3500);
+  } catch (e) { toast(e.message, 'err'); return false; }
+}
+function archiveDialog() {
+  modal(`<div class="parch"><div class="phd"><h3>Архив проектов</h3><button type="button" class="bb" data-no aria-label="Закрыть">✕</button></div>
+    <label class="psearch"><input type="text" id="pa-q" placeholder="Найти в архиве" autocomplete="off"></label>
+    <div class="plist" id="pa-list"></div>
+    <p class="sub pfoot">Папки архивных проектов лежат на своих местах, чаты не удаляются. «Вернуть» — проект снова в колонке.</p></div>`, {
+    onOpen(m, close) {
+      const q = m.querySelector('#pa-q'), list = m.querySelector('#pa-list');
+      const draw = () => {
+        const s = q.value.trim().toLowerCase();
+        const all = archivedProjects(), rows = all.filter(p => !s || p.name.toLowerCase().includes(s) || p.short.toLowerCase().includes(s));
+        if (!all.length) return close();
+        m.querySelector('.psearch').hidden = all.length < 6;
+        list.innerHTML = rows.map(p => {
+          const n = chatsOf(p.id).filter(c => !c.archived).length;
+          return `<div class="parow" data-p="${p.id}">${ptile(p)}<div class="c"><b>${esc(p.name)}</b>
+            <span class="${p.missing ? 'miss' : ''}">${p.missing ? `папки ${esc(p.short)} больше нет на диске` : `папка на месте · ${esc(p.short)}`}</span>
+            <span>${chatsWord(n)}${p.archived_at ? ` · убран ${esc(ago(p.archived_at))}` : ''}</span></div>
+            <button type="button" class="btn back" data-back>Вернуть</button><button type="button" class="bb" data-more aria-label="Ещё">${ICONS.more}</button></div>`;
+        }).join('') || '<p class="sub" style="padding:14px 4px">Ничего не нашлось.</p>';
+      };
+      list.addEventListener('click', async e => {
+        const row = e.target.closest('[data-p]'); if (!row) return;
+        const p = projectOf(+row.dataset.p);
+        if (e.target.closest('[data-back]')) { close(); return restoreProject(p.id); }
+        if (e.target.closest('[data-more]')) {
+          e.stopPropagation();
+          menu(e.target.closest('[data-more]'), [{ text: 'Отключить совсем', hint: 'пропадёт из Depo вместе с чатами, папка останется', danger: true,
+            run: () => { close(); confirmBox('Отключить проект?', `«${p.name}» пропадёт из Depo вместе со своими чатами. Папка ${p.short} останется на диске нетронутой.`,
+              'Отключить', () => api(`/api/projects/${p.id}`, { method: 'DELETE' }).catch(err => toast(err.message))); } }]);
+        }
+      });
+      q.oninput = draw;
+      m.querySelector('[data-no]').onclick = close;
+      draw();
+    },
+  });
 }
 
 function userMenu(anchor) {
   menu(anchor, [
-    { label: S.host?.name ?? '' },
+    { label: hostLabel() },
     { text: 'Настройки', run: settingsDialog },
     { text: 'Сменить пароль', run: passwordDialog },
     { text: 'Обновить лимиты', hint: 'перечитать лимиты агентов сейчас', run: refreshMeters },
@@ -1656,18 +1863,20 @@ function passwordDialog() {
   });
 }
 
-/* ───────── второй чат рядом ───────── */
-const P2 = { cid: null, messages: [], atts: [], live: '', on: false, tab: '1' };
+const P2 = { cid: null, on: false, tab: '1' };
 function splitOn(on) {
   if (on && innerWidth <= 760) return;
   P2.on = on;
   $('#pane2').hidden = !on;
   $('#split-tabs').hidden = !on;
   document.querySelector('.main').classList.toggle('split', on);
+  renderTasks();
   document.querySelector('.main').dataset.p2Tab = P2.tab;
   document.querySelectorAll('#split-tabs [data-p2-tab]').forEach(b => b.setAttribute('aria-current', String(b.dataset.p2Tab === P2.tab)));
   $('#chip-split').setAttribute('aria-pressed', on);
-  if (on) { renderSecond(); P2.cid ? loadSecond(P2.cid) : pickSecond(); }
+  if (!on) { $('#p2-frame').src = 'about:blank'; return; }
+  renderSecond();
+  P2.cid ? loadSecond(P2.cid) : pickSecond();
 }
 function pickSecond() {
   const items = S.chats.filter(c => !c.archived && c.id !== S.cid)
@@ -1677,76 +1886,25 @@ function pickSecond() {
 }
 async function createSecond() {
   const p = curProject(); if (!p) return;
-  try { const d = await api('/api/chats', { method: 'POST', body: { project_id: p.id, ...draft(), team: teamOnHere() } }); upsertChat(d.chat); await loadSecond(d.chat.id); }
+  try { const d = await api('/api/chats', { method: 'POST', body: { project_id: p.id, ...draft(), team: teamOnHere() } }); upsertChat(d.chat); loadSecond(d.chat.id); }
   catch (e) { toast(e.message); }
 }
-async function loadSecond(id) {
-  P2.cid = id;
+const p2Url = id => `/?pane=1&chat=${encodeURIComponent(id)}`;
+function loadSecond(id) {
   if (!id) return;
-  try {
-    const d = await api(`/api/chats/${id}/messages`);
-    P2.messages = d.messages; P2.live = ''; upsertChat(d.chat);
-    renderSecond();
-  } catch (e) { toast(e.message); }
+  P2.cid = id;
+  $('#p2-frame').src = p2Url(id);
+  renderSecond();
 }
-const p2Chat = () => chatOf(P2.cid);
-const p2Patch = async patch => {
-  const c = p2Chat(); if (!c) return;
-  try { const d = await api(`/api/chats/${c.id}`, { method: 'PATCH', body: patch }); upsertChat(d.chat); renderSecond(); }
-  catch (e) { toast(e.message); }
-};
-const p2NearBottom = () => { const b = $('#p2-feed'); return b.scrollHeight - b.scrollTop - b.clientHeight < 100; };
 function renderSecond() {
-  const c = p2Chat();
+  const c = chatOf(P2.cid);
   $('#p2-pick').textContent = c ? c.title : 'выбрать чат';
-  const run = c && isRunning(c.id);
-  $('#p2-state').className = 'p2state' + (run ? ' run' : '');
-  $('#p2-state').textContent = c ? (run ? 'работает' : STATE_RU[c.state] || '') : '';
-  const send = $('#p2-send'); send.classList.toggle('stop', !!run); send.setAttribute('aria-label', run ? 'Остановить' : 'Отправить');
-  send.innerHTML = run ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
-  $('#p2-agent').textContent = c ? agName(c.provider) : 'агент';
-  $('#p2-model').textContent = c ? modelName(c.provider, c.model) : 'модель';
-  const efforts = c ? effortsFor(c.provider, c.model) : [];
-  $('#p2-effort').textContent = c?.effort ? (efforts.find(x => x.id === c.effort)?.name ?? c.effort) : 'скорость';
-  renderP2Atts();
-  const box = $('#p2-feed');
-  const stick = p2NearBottom(), top = box.scrollTop;
-  box.innerHTML = '';
-  if (!c) { box.append(el('div', 'empty', 'Выбери чат сверху — будешь видеть его, пока работаешь в основном.')); return; }
-  for (const m of P2.messages.slice(-80)) { const n = msgNode(m, c, box); if (n) placeMsg(box, n, m, c); }
-  if (P2.live || run) box.append(el('div', 'turn a', `<div class="md">${P2.live ? md(P2.live, projectOf(c.project_id)) : '<span class="typing"><i></i><i></i><i></i></span>'}</div>`));
-  box.scrollTop = stick ? box.scrollHeight : top;
-}
-function renderP2Atts() {
-  const box = $('#p2-atts'); box.hidden = !P2.atts.length;
-  box.innerHTML = P2.atts.map((a, i) => `<span class="a ${a.done ? '' : 'up'}">${a.preview ? `<img src="${a.preview}" alt="">` : '📎'}<span class="n">${esc(a.file.name)}</span><button class="x" data-i="${i}" aria-label="Убрать">${ICONS.x}</button></span>`).join('');
-  box.querySelectorAll('.x').forEach(b => b.onclick = () => { P2.atts.splice(+b.dataset.i, 1); renderP2Atts(); });
-}
-async function addP2Files(list) {
-  const c = p2Chat(); if (!c) return toast('Сначала выбери чат справа.');
-  await uploadInto(c.id, [...list].filter(f => f?.size), P2.atts, renderP2Atts);
+  $('#p2-tab').hidden = !c;
 }
 $('#chip-split').onclick = () => splitOn(!P2.on);
 $('#p2-close').onclick = () => splitOn(false);
 $('#p2-pick').onclick = e => { e.stopPropagation(); pickSecond(); };
-$('#p2-send').onclick = async () => {
-  const t = $('#p2-inp'), text = t.value.trim(), c = p2Chat();
-  if (isRunning(P2.cid)) { try { await api(`/api/chats/${P2.cid}/cancel`, { method: 'POST' }); } catch (e) { toast(e.message); } return; }
-  if ((!text && !P2.atts.length) || !c) return;
-  if (P2.atts.some(a => !a.done)) return toast('Подожди, вложения ещё грузятся.');
-  t.value = '';
-  const attachments = P2.atts.map(a => a.meta); P2.atts = []; renderP2Atts();
-  try { await api(`/api/chats/${P2.cid}/send`, { method: 'POST', body: { text, attachments } }); }
-  catch (e) { toast(e.message); }
-};
-$('#p2-inp').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#p2-send').click(); } };
-$('#p2-inp').oninput = e => resizeCompose(e.currentTarget);
-$('#p2-attach').onclick = () => $('#p2-file').click();
-$('#p2-file').onchange = e => { addP2Files(e.target.files); e.target.value = ''; };
-$('#p2-agent').onclick = e => menu(e.currentTarget, [{ label: 'Агент' }, ...agents().map(p => ({ text: agName(p), active: p === p2Chat()?.provider, run: () => p2Patch({ provider: p, model: null, effort: '' }) }))]);
-$('#p2-model').onclick = e => { const c = p2Chat(), items = S.models?.[c?.provider]?.items ?? []; menu(e.currentTarget, [{ label: 'Модель' }, ...items.map(m => ({ text: m.name, active: m.id === (c?.model || ''), run: () => p2Patch({ model: m.id || null, effort: '' }) }))]); };
-$('#p2-effort').onclick = e => { const c = p2Chat(), list = effortsFor(c?.provider, c?.model); if (!c || !list.length) return; menu(e.currentTarget, [{ label: 'Сколько думать' }, { text: 'По умолчанию', active: !c.effort, run: () => p2Patch({ effort: '' }) }, ...list.map(x => ({ text: x.name, active: c.effort === x.id, run: () => p2Patch({ effort: x.id }) }))]); };
-$('#p2-mic').onclick = () => (V.rec ? V.rec.finish() : micToggle($('#p2-inp'), $('#p2-mic')));
+$('#p2-tab').onclick = () => P2.cid && open(p2Url(P2.cid), '_blank', 'noopener');
 $('#split-tabs').onclick = e => { const b = e.target.closest('[data-p2-tab]'); if (!b) return; P2.tab = b.dataset.p2Tab; document.querySelector('.main').dataset.p2Tab = P2.tab; document.querySelectorAll('#split-tabs button').forEach(x => x.setAttribute('aria-current', String(x === b))); };
 $('#p2-resize').onpointerdown = e => {
   if (innerWidth < 1024) return;
@@ -1756,8 +1914,8 @@ $('#p2-resize').onpointerdown = e => {
   const drag = ev => move(ev.clientX); addEventListener('pointermove', drag); addEventListener('pointerup', up, { once: true });
 };
 
-/* ───────── вложения ───────── */
 function renderAtts() {
+  syncSendBtn();
   const box = $('#atts');
   box.hidden = !S.atts.length;
   box.innerHTML = S.atts.map((a, i) => `<span class="a ${a.done ? '' : 'up'}">${a.preview ? `<img src="${a.preview}" alt="">` : '📎'}<span class="n">${esc(a.file.name)}</span><button class="x" data-i="${i}" aria-label="Убрать">${ICONS.x}</button></span>`).join('');
@@ -1767,7 +1925,7 @@ async function addFiles(list) {
   const files = [...list].filter(f => f && f.size);
   if (!files.length) return;
   let cid = S.cid;
-  if (!cid) {                                   // вложение до первого сообщения — заводим чат
+  if (!cid) {
     const p = curProject(); if (!p) return;
     try { const d = await api('/api/chats', { method: 'POST', body: { project_id: p.id, ...draft(), team: teamOnHere() } }); upsertChat(d.chat); S.cid = cid = d.chat.id; S.messages = []; resetDraft(); renderAll(); renderFeed(); }
     catch (e) { return toast(e.message); }
@@ -1775,7 +1933,6 @@ async function addFiles(list) {
   await uploadInto(cid, files, S.atts, renderAtts);
   $('#inp').focus();
 }
-// Загрузка вложений в чат — общая для основного поля ввода и второй колонки «Рядом»
 async function uploadInto(cid, files, list, redraw) {
   for (const file of files) {
     if (file.size > 32 * 1048576) { toast(`${file.name}: больше 32 МБ, не возьму.`); continue; }
@@ -1793,7 +1950,7 @@ async function uploadInto(cid, files, list, redraw) {
 $('#btn-attach').onclick = () => $('#file-inp').click();
 $('#file-inp').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
 
-const PASTE_LIMIT = 6000;      // длиннее — кладём файлом, иначе съедает всё окно композера
+const PASTE_LIMIT = 6000;
 $('#inp').addEventListener('paste', e => {
   const files = [...(e.clipboardData?.files ?? [])];
   if (files.length) { e.preventDefault(); return addFiles(files); }
@@ -1813,7 +1970,6 @@ $('#inp').addEventListener('paste', e => {
   cb.addEventListener('drop', e => { e.preventDefault(); depth = 0; cb.classList.remove('drop'); addFiles(e.dataTransfer.files); });
 }
 
-/* ───────── перетаскивание проектов на рейке ───────── */
 {
   const rail = $('#rail');
   let drag = null;
@@ -1859,7 +2015,6 @@ $('#inp').addEventListener('paste', e => {
   rail.style.touchAction = 'pan-y';
 }
 
-/* ───────── файлы проекта ───────── */
 const colorDiff = patch => esc(patch).split('\n').map(l =>
   l.startsWith('+++') || l.startsWith('---') || l.startsWith('diff ') ? `<span class="hd2">${l}</span>`
     : l.startsWith('@@') ? `<span class="hunk">${l}</span>`
@@ -1946,16 +2101,10 @@ async function filesDialog(initialTab = 'tree') {
 }
 $('#chip-files').onclick = filesDialog;
 
-/* ───────── голос: черновик Vosk на лету, чистовик Whisper в конце ───────── */
 const V = { available: false, secure: false, rec: null };
 const httpsUrl = () => S.https ? `https://${location.hostname}:${S.https}/` : null;
 const MIC_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>';
 
-// Движки диктовки. Выбор — на устройство (телефону и ПК удобно разное), в localStorage.
-//  local   — Vosk-черновик + Whisper-чистовик на малине; звук никуда не уходит;
-//  browser — Web Speech API самого браузера. Ключ не нужен, но в Chrome звук уходит на серверы Google —
-//            об этом честно сказано в настройках. Наличие API ещё не значит, что он работает: ошибки
-//            (network, not-allowed, language-not-supported) показываются как есть.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const voiceEngine = () => {
   let v = 'local'; try { v = localStorage.getItem('depo.voice') || 'local'; } catch { }
@@ -1988,9 +2137,6 @@ async function voiceInit() {
         : V.whisper ? `Диктовка · ${V.vosk} + whisper ${V.whisper}` : 'Диктовка · только черновик';
 }
 
-// Диктовка голосом ChatGPT через Codex: микрофон уходит по WebRTC прямо в ChatGPT (сессию заводит
-// codex app-server на сервере под входом Codex), текст речи приходит событиями. Ответный голос
-// модели не воспроизводим — дорожку не подключаем никуда. Отправляет текст владелец сам.
 async function gptDictate(inp = $('#inp'), btn = $('#btn-mic')) {
   const box = $('#dictate'), dtext = $('#dtext'), dtime = $('#dtime');
   let stream;
@@ -2035,7 +2181,7 @@ async function gptDictate(inp = $('#inp'), btn = $('#btn-mic')) {
   $('#d-cancel').onclick = V.rec.cancel;
   try {
     stream.getAudioTracks().forEach(t => pc.addTrack(t, stream));
-    pc.ontrack = e => { e.track.enabled = false; };      // голос ответа модели не нужен
+    pc.ontrack = e => { e.track.enabled = false; };
     pc.createDataChannel('oai-events');
     await pc.setLocalDescription(await pc.createOffer());
     await new Promise(r => { if (pc.iceGatheringState === 'complete') r(); pc.onicegatheringstatechange = () => pc.iceGatheringState === 'complete' && r(); setTimeout(r, 2000); });
@@ -2046,7 +2192,6 @@ async function gptDictate(inp = $('#inp'), btn = $('#btn-mic')) {
     dtext.textContent = 'слушаю…';
   } catch (e) {
     teardown();
-    // не оставляем владельца без диктовки: сразу продолжаем на движке сервера
     if (V.available && V.secure) {
       toast('ChatGPT-голос сейчас недоступен (' + e.message + ') — диктую через сервер.', 'warn', 7000);
       V.forceLocal = true;
@@ -2055,7 +2200,6 @@ async function gptDictate(inp = $('#inp'), btn = $('#btn-mic')) {
   }
 }
 
-// Диктовка средствами браузера: текст попадает в поле ввода, отправляет владелец сам.
 function browserDictate(inp = $('#inp'), btn = $('#btn-mic')) {
   const rec = new SR();
   rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -2139,7 +2283,6 @@ function drawWave(analyser, canvas) {
   return () => cancelAnimationFrame(raf);
 }
 
-// Float32 любой частоты → Int16 16 кГц
 function toPcm16(chunks, from) {
   const total = chunks.reduce((n, c) => n + c.length, 0);
   const src = new Float32Array(total);
@@ -2249,14 +2392,9 @@ async function micToggle(inp = $('#inp'), btn = $('#btn-mic')) {
 }
 $('#btn-mic').onclick = () => (V.rec ? V.rec.finish() : micToggle());
 
-/* ───────── настройки ───────── */
 const qm = t => `<span class="qm" tabindex="0" role="note" aria-label="${esc(t)}">
   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.9 5.9a2.1 2.1 0 1 1 2.9 2q-.8.5-.8 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11.8" r=".95" fill="currentColor"/></svg>
   <span class="tip">${esc(t)}</span></span>`;
-/* ───────── разговор с Gemini голосом ───────── */
-// Всё без единого ключа API: слушает малина (Vosk + Whisper, как в диктовке), думает Gemini CLI
-// под аккаунтом Google, а говорит сам браузер (встроенный синтез речи телефона или Mac).
-// Поэтому разговор работает и на телефоне, и с ноутбука, а наружу уходит только текст.
 const LV = { on: false, stop: null, busy: false, speaking: null };
 
 const lvSay = (kind, text) => {
@@ -2267,7 +2405,6 @@ const lvSay = (kind, text) => {
 };
 const lvStatus = t => { $('#live-st').textContent = t; };
 
-// Голос устройства: на телефоне и Mac он уже есть и звучит прилично — ставить синтез на малину незачем.
 function lvSpeak(text) {
   return new Promise(resolve => {
     const S2 = window.speechSynthesis;
@@ -2284,8 +2421,6 @@ function lvSpeak(text) {
 }
 const lvHush = () => { try { window.speechSynthesis?.cancel(); } catch { } LV.speaking = null; };
 
-// Одна реплика владельца: пишем, пока он говорит, и останавливаемся на паузе.
-// Распознаёт та же связка, что и в диктовке, — ничего нового на малину не ставим.
 async function lvListen(stream, ac, analyser) {
   const sid = (await api('/api/voice/start', { method: 'POST' })).id;
   const proc = ac.createScriptProcessor(4096, 1, 1);
@@ -2302,7 +2437,7 @@ async function lvListen(stream, ac, analyser) {
     return r.json();
   };
 
-  const level = () => {                       // громкость сейчас — по ней и понимаем, говорит ли он
+  const level = () => {
     const buf = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteTimeDomainData(buf);
     let sum = 0; for (const v of buf) sum += (v - 128) ** 2;
@@ -2315,11 +2450,11 @@ async function lvListen(stream, ac, analyser) {
     await new Promise(r => setTimeout(r, 180));
     const l = level();
     if (l > 0.035) { spoke = true; quiet = 0; } else if (spoke) quiet += 180;
-    if (!busy && Date.now() - t0 > 900) {     // черновик по ходу — чтобы было видно, что слышит
+    if (!busy && Date.now() - t0 > 900) {
       busy = true;
       send(false).then(d => { if (d?.draft) { draft = d.draft; lvSay('user', draft); } }).catch(() => { }).finally(() => { busy = false; });
     }
-    if (spoke && quiet >= 1100) break;        // пауза больше секунды — реплика закончилась
+    if (spoke && quiet >= 1100) break;
     if (!spoke && Date.now() - t0 > 20000) break;
   }
   proc.onaudioprocess = null;
@@ -2378,11 +2513,7 @@ function liveStop(hide = true) {
   lvStatus('закончили');
 }
 
-/* ───────── вход в аккаунт агента (без терминала) ───────── */
-// Depo показывает экран CLI как есть и отправляет туда то, что владелец напечатал:
-// подсказки у claude/codex меняются от версии к версии, угадывать их — ломаться на каждом обновлении.
 const LINKS = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini', kimi: 'Kimi' };
-// у кого куда вводится код: у Codex — на странице OpenAI, у Claude и Gemini — обратно сюда
 const LINK_HINT = {
   codex: 'Открой ссылку на любом своём устройстве, там введи код, показанный ниже, и войди в свой ChatGPT. Как только войдёшь — Depo сам это увидит и закроет окно.',
   kimi: 'Открой ссылку на любом своём устройстве, там введи код, показанный ниже, и войди в свой Kimi. Как только войдёшь — Depo сам это увидит и закроет окно.',
@@ -2447,7 +2578,6 @@ function linkPaint(st) {
       <button class="btn" data-copy="${esc(u)}">Скопировать</button>`;
     box.querySelector('[data-copy]').onclick = () => navigator.clipboard?.writeText(u).then(() => toast('Ссылка скопирована', 'ok', 2500), () => { });
   }
-  // Codex: код вводится НА странице OpenAI. Claude/Gemini: код показывает страница, вставляем обратно.
   const codeStep = m.querySelector('#lk-codestep'), pasteStep = m.querySelector('#lk-paststep');
   if (st.code) {
     codeStep.hidden = false;
@@ -2465,11 +2595,8 @@ function linkPaint(st) {
     m.querySelector('#lk-waitsub').textContent = st.error || 'попробуй ещё раз';
   }
 }
-// у Codex код вводится на странице (polling), у Claude и Gemini — возвращается в Depo
-const prov_needs_paste = p => p === 'claude' || p === 'gemini';   // codex и kimi вводят код на странице
+const prov_needs_paste = p => p === 'claude' || p === 'gemini';
 
-// ───────── Обновления AI CLI ─────────
-// Один раздел на четырёх агентов: версия, что доступно, кнопки и авто. Живёт на событиях cliupd.
 const CU = { box: null, st: null };
 const CU_ST = {
   updating: ['acc', 'Обновляется…'], pending: ['warn', 'Ждёт'], available: ['acc', 'Есть обновление'], current: ['ok', 'Актуальная'],
@@ -2534,11 +2661,9 @@ function renderCliUpd() {
   });
 }
 
-/* ───────── аккаунты агентов: почта, лимиты, несколько аккаунтов ───────── */
 const ACC_TITLES = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini', kimi: 'Kimi' };
-// Лимиты в настройках — как везде в Depo: сколько ИЗРАСХОДОВАНО; полоска растёт и краснеет у края.
 const limName = l => l.label.replace(/^Сессия · /, '').replace('Неделя · все модели', 'неделя').replace(/^Неделя/, 'неделя').replace(/^Месяц/, 'месяц');
-const limBars = (limits, { resets = true } = {}) => (limits ?? []).map(l => {
+const limBars = (limits, { resets = true } = {}) => orderLimits(limits ?? []).map(l => {
   const used = Math.max(0, Math.min(100, Math.round(l.pct)));
   return `<span class="alim${used >= 90 ? ' low' : used >= 70 ? ' mid' : ''}" title="${esc(l.label)}: израсходовано ${used}%${l.resets ? ', сброс ' + esc(l.resets) : ''}">
     <span class="lb">${esc(limName(l))}</span><i style="--w:${used}%"></i><b>${used}%</b>${resets && l.resets ? `<em>сброс ${esc(l.resets)}</em>` : ''}</span>`;
@@ -2610,7 +2735,6 @@ async function accClick(e, m, close) {
   }
 }
 
-/* ───────── настройки команды агентов ───────── */
 function teamSettings(box) {
   if (!box) return;
   let cfg = JSON.parse(JSON.stringify(S.team ?? { roles: [] }));
@@ -2697,7 +2821,6 @@ function teamSettings(box) {
   });
 }
 
-/* ───────── доступ через проводник ───────── */
 async function loadRemote(box) {
   if (!box) return;
   let d; try { d = await api('/api/remote'); } catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
@@ -2766,8 +2889,6 @@ async function refreshMeters() {
     toast('Лимиты обновлены', 'ok', 2500);
   } catch (e) { toast(e.message); }
 }
-// Данные настроек держим наготове: подтягиваем в фоне после запуска, окно открывается мгновенно,
-// а свежие цифры (аккаунты, лимиты) подменяются на лету.
 const settingsData = () => Promise.all([
   api('/api/telegram'),
   api('/api/log').then(d => d.items),
@@ -2789,16 +2910,14 @@ async function settingsDialog(opts = {}) {
     ['deploy_blocked', 'Публикация остановлена', 'Обязательная проверка не прошла, поэтому небезопасный релиз не публикуется.'],
     ['rollback', 'Выполнен откат', 'Проверка после публикации не прошла, предыдущий релиз восстановлен.'],
   ];
-  // Агенты-исполнители: вход прямо отсюда, терминал не нужен.
   const accRow = (prov, title, hint) => `<div class="srow acard" data-acc="${prov}">${accCard(prov, title, hint, acc?.[prov] ?? {})}</div>`;
-  // Агент без своего входа (ещё не поставлен его CLI) — карточка с объяснением, без полей для ключей.
   const soonRow = (prov, title, hint, why) =>
     `<div class="srow acard"><div class="c"><b>${agIcon(prov)}${title}${qm(hint)}</b><span>${esc(why)}</span></div>
       <div class="ctl"><button class="btn" disabled>Нет входа</button></div></div>`;
   const v = V.available ? 'работает' : 'не запущен';
 
   modal(`<div class="smodal sfull">
-    <div class="shead"><div><h3>Настройки</h3><span class="shsub">Depo на ${esc(S.host?.name ?? '')} · ${esc(S.version ?? '')}</span></div><button class="bb shx" data-no aria-label="Закрыть">✕</button></div>
+    <div class="shead"><div><h3>Настройки</h3><span class="shsub">Depo на ${esc(hostLabel())} · ${esc(S.version ?? '')}</span></div><button class="bb shx" data-no aria-label="Закрыть">✕</button></div>
     <div class="sbody">
     <nav class="stabs" id="stabs" aria-label="Разделы настроек">
       <button data-st="acc" aria-selected="true">Аккаунты</button>
@@ -2900,7 +3019,9 @@ async function settingsDialog(opts = {}) {
     <section data-st="me" hidden>
 <div class="gl2">Профиль</div>
     <div class="mehead"><span class="ownav"><span>${esc((S.user?.login ?? '?')[0].toUpperCase())}</span></span>
-      <div><b class="ownname">${esc(S.user?.login ?? '')}</b><span>владелец Depo · ${esc(S.host?.name ?? '')}</span></div></div>
+      <div><b class="ownname">${esc(S.user?.login ?? '')}</b><span>владелец Depo · ${esc(hostLabel())}</span></div></div>
+    <div class="srow"><div class="c"><b>Название сервера${qm('Как Depo называет машину, на которой работает: на главной, в шапке и в Телеграм-боте. Пусто — «Сервер» и имя хоста.')}</b><span>например «Домашний сервер» или «VPS»</span></div>
+      <div class="ctl"><input type="text" id="pf-srv" maxlength="40" placeholder="Сервер" value="${esc(S.prefs.server_name || '')}" autocomplete="off" spellcheck="false"></div></div>
     <div class="srow"><div class="c"><b>Код из Телеграма на новом устройстве${qm('После верного пароля с нового телефона или компьютера бот присылает 6 цифр — без них не войти. Под кодом кнопка «Это не я»: она отменяет вход и выключает удалённый доступ. Устройство, где код подтверждён, запоминается.')}</b><span id="tf-note">загружаю…</span></div>
       <div class="ctl"><button class="sw2" id="tf-on" role="switch" aria-checked="false"></button></div></div>
     <div id="tf-dev"></div>
@@ -3023,7 +3144,6 @@ async function settingsDialog(opts = {}) {
         if (want && Notification.permission !== 'granted') { const r = await Notification.requestPermission(); if (r !== 'granted') return toast('Браузер не дал разрешение на уведомления.'); }
         sw3.setAttribute('aria-checked', want); localStorage.setItem('depo.notif', want ? '1' : '0');
       };
-      // Push: состояние — живая подписка этого устройства, а не флажок в localStorage.
       const sw4 = m.querySelector('#pf-push');
       const pushSub = async () => {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
@@ -3058,16 +3178,14 @@ async function settingsDialog(opts = {}) {
       m.querySelector('#save').onclick = async () => {
         try {
           await api('/api/telegram', { method: 'POST', body: payload() });
-          const d = await api('/api/settings', { method: 'POST', body: { provider: pfProv.value, model: pfModel.value, effort: pfEff.value, permission_mode: pfPerm.value, mirror: sw2.getAttribute('aria-checked') === 'true' ? '1' : '0', archive_days: m.querySelector('#pf-days').value, tools: swT.getAttribute('aria-checked') === 'true' ? '1' : '0', snapshot: swS.getAttribute('aria-checked') === 'true' ? '1' : '0',
+          const d = await api('/api/settings', { method: 'POST', body: { provider: pfProv.value, model: pfModel.value, effort: pfEff.value, permission_mode: pfPerm.value, mirror: sw2.getAttribute('aria-checked') === 'true' ? '1' : '0', archive_days: m.querySelector('#pf-days').value, server_name: (m.querySelector('#pf-srv')?.value || '').trim().slice(0, 40), tools: swT.getAttribute('aria-checked') === 'true' ? '1' : '0', snapshot: swS.getAttribute('aria-checked') === 'true' ? '1' : '0',
             companion: m.querySelector('#pf-comp')?.value || '', assistant_voice: m.querySelector('#pf-asvoice')?.value || 'chatgpt' } });
           S.prefs = d.prefs; applyFeedPrefs();
-          try { await refreshModels(); } catch { }   // сменился собеседник — обновим значок кнопки
-          setDirty(false); toast('Настройки сохранены', 'ok', 2500);   // остаёмся там же, где были
+          try { await refreshModels(); } catch { }
+          setDirty(false); toast('Настройки сохранены', 'ok', 2500);
         } catch (e) { err.textContent = e.message; toast(e.message, 'err', 5000); }
       };
-      // «Сохранить» нужна только полям, которые сохраняются кнопкой (чат, Телеграм, собеседник);
-      // переключатели устройства, диктовки, пин-кода и доступа применяются сразу.
-      const SAVED = '#pf-provider,#pf-model,#pf-effort,#pf-perm,#pf-days,#pf-comp,#pf-asvoice,#tg-token,#tg-chat,[data-ev]';
+      const SAVED = '#pf-srv,#pf-provider,#pf-model,#pf-effort,#pf-perm,#pf-days,#pf-comp,#pf-asvoice,#tg-token,#tg-chat,[data-ev]';
       m.querySelector('#pf-asview').onchange = e => { try { localStorage.setItem('depo.asst.view', e.target.value); } catch { } toast('Вид ассистента на этом устройстве сохранён', 'ok', 2000); };
       const SAVED_SW = '#pf-mirror,#pf-tools,#pf-snap,#tg-on';
       const foot = m.querySelector('.sfoot');
@@ -3099,11 +3217,9 @@ async function settingsDialog(opts = {}) {
   });
 }
 
-/* ───────── панель ───────── */
 const collapsed = () => $('#app').dataset.side === '0';
 function isPhone() { return innerWidth <= 760; }
 function setSide(open) {
-  // На телефоне выезжающей панели нет: список чатов — отдельный экран со своей записью в истории.
   if (open && isPhone()) { $('#app').dataset.side = '0'; return mgo('chats'); }
   $('#app').dataset.side = open ? '1' : '0';
   $('#btn-side').title = open ? 'Свернуть панель  [' : 'Развернуть панель  [';
@@ -3118,7 +3234,6 @@ function openFly(top, p) {
   f.style.top = Math.max(8, Math.min(top, innerHeight - f.offsetHeight - 16)) + 'px';
 }
 
-/* ───────── события интерфейса ───────── */
 $('#rail').addEventListener('click', e => {
   const b = e.target.closest('.pbtn'); if (!b) return;
   const p = projectOf(+b.dataset.p); if (!p) return;
@@ -3158,18 +3273,51 @@ $('#clist').addEventListener('keydown', e => {
 $('#btn-side').onclick = () => setSide(collapsed());
 $('#btn-exp').onclick = () => (isPhone() ? mback() : setSide(true));
 $('#btn-newproject').onclick = newProjectDialog;
+$('#btn-archive').onclick = archiveDialog;
+{
+  const dt = $('#dtext');
+  if (dt) new MutationObserver(() => {
+    dt.scrollTop = dt.scrollHeight;
+    dt.classList.toggle('more', dt.scrollHeight > dt.clientHeight + 1);
+  }).observe(dt, { childList: true, characterData: true, subtree: true });
+}
+{
+  const tileOf = e => e.target.closest?.('#rail .pbtn[data-p], .mproj[data-p]');
+  const open = b => { const p = projectOf(+b.dataset.p); if (p) projectMenu(b, p); };
+  let lp = null;
+  document.addEventListener('contextmenu', e => {
+    const b = tileOf(e); if (!b) return;
+    e.preventDefault();
+    if (lp?.fired) return;
+    if (lp) { clearTimeout(lp.timer); lp.fired = true; }
+    open(b);
+  });
+  document.addEventListener('touchstart', e => {
+    const b = tileOf(e); if (!b || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    lp = { x: t.clientX, y: t.clientY, fired: false, timer: setTimeout(() => { lp.fired = true; navigator.vibrate?.(8); open(b); }, 520) };
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!lp || lp.fired) return;
+    const t = e.touches[0];
+    if (Math.hypot(t.clientX - lp.x, t.clientY - lp.y) > 10) { clearTimeout(lp.timer); lp = null; }
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!lp) return;
+    if (lp.fired) e.preventDefault();
+    else clearTimeout(lp.timer);
+    setTimeout(() => { lp = null; }, 0);
+  }, { passive: false });
+}
 $('#btn-pmenu').onclick = e => { e.stopPropagation(); projectMenu(e.currentTarget); };
 $('#btn-user').onclick = e => { e.stopPropagation(); userMenu(e.currentTarget); };
-// Чат заводится в базе при первом сообщении, иначе копятся пустые «Новый чат»
 $('#btn-newchat').onclick = () => {
   if (!curProject()) return;
+  S.view = 'chat';
   S.cid = null; S.messages = []; S.live = null; S.atts = []; resetDraft(); S.teamNext = undefined; renderAtts();
   renderAll(); renderFeed(); $('#inp').focus(); save();
   if (innerWidth <= 760) setSide(false);
 };
-// Gemini отвечает в том же чате, но ничего не делает руками: это разговор, а не ход агента.
-// Два режима: «Объяснить» — только чтение; «Подготовить уточнение» — черновик, который владелец
-// сам проверяет и вставляет в поле ввода. Агенту собеседник ничего не отправляет.
 async function askCompanion(text, mode) {
   const b = $('#btn-gemini'), inp = $('#inp');
   b.disabled = true; b.classList.add('busy');
@@ -3185,7 +3333,7 @@ $('#btn-gemini').onclick = () => {
 };
 $('#btn-board').onclick = () => boardDialog();
 $('#live-stop').onclick = () => liveStop();
-$('#live-ball').onclick = () => lvHush();          // перебить ответ, если заговорил «поверх»
+$('#live-ball').onclick = () => lvHush();
 $('#live-send').onclick = async () => {
   const i = $('#live-text'); const t = i.value.trim(); if (!t || !S.cid) return;
   i.value = ''; lvHush(); lvSay('user', t); lvStatus('думает');
@@ -3206,7 +3354,6 @@ $('#runpill').onclick = e => {
     return { text: c ? `${p?.name ?? ''} — ${c.title}` : 'Задача', hint: `${agName(c?.provider)}${run ? ' · ' + duration(activeMs(run)) : ''}`, run: () => selectChat(id) };
   })]);
 };
-// нижняя навигация на телефоне
 $('#bnav').addEventListener('click', e => {
   const b = e.target.closest('[data-nav]'); if (!b) return;
   const nav = b.dataset.nav;
@@ -3223,7 +3370,7 @@ function togglePop(btn) {
   $('#pop-ctx').hidden = on;
   if (!on) {
     renderCtxPop();
-    for (const p of teamChat(curChat()) ? teamProviders() : [curProvider()])   // в команде — свежие лимиты каждого участника
+    for (const p of teamChat(curChat()) ? teamProviders() : [curProvider()])
       api(`/api/meters?provider=${p}`)
         .then(d => { S.meters = { ...S.meters, [d.provider]: d }; renderCtxPop(); renderLimits(); }).catch(() => { });
     if (S.cid) loadChatContext(S.cid);
@@ -3286,7 +3433,8 @@ $('#btn-sendmode').onclick = e => {
     { text: 'После задачи', hint: 'сохранить в постоянной очереди', active: S.sendMode === 'after', run: () => { S.sendMode = 'after'; renderHead(); } },
   ]);
 };
-$('#btn-send').onclick = () => (isRunning(S.cid) ? stop() : send());
+$('#btn-send').onclick = () => (sendIsStop() ? stop() : send());
+$('#rl-stop').onclick = () => stop();
 $('#btn-cfg').onclick = () => $('#cb').classList.toggle('xtra');
 async function toggleTeamMember(provider) {
   const cfg = JSON.parse(JSON.stringify(S.team ?? {})), off = new Set(cfg.off ?? []), on = !off.has(provider);
@@ -3316,7 +3464,6 @@ $('#inp').addEventListener('input', autosize);
 $('#inp').addEventListener('input', () => {
   if (S.cid) { S.chatState.set(S.cid, { ...(S.chatState.get(S.cid) ?? {}), draft: $('#inp').value }); persistDrafts(); }
 });
-// Черновики переживают закрытие вкладки: свои же недописанные сообщения, на своём устройстве.
 const loadDrafts = () => { try { return JSON.parse(localStorage.getItem('depo.drafts') || '{}'); } catch { return {}; } };
 let draftTimer = 0;
 function persistDrafts() {
@@ -3331,7 +3478,6 @@ function persistDrafts() {
     } catch { }
   }, 400);
 }
-// На телефоне Enter — новая строка, отправка — кнопкой (как в мессенджерах). На компьютере Enter отправляет, Shift+Enter — перенос.
 const touchOnly = () => matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
 if (touchOnly()) $('#inp').setAttribute('enterkeyhint', 'enter');
 $('#inp').addEventListener('keydown', e => {
@@ -3346,10 +3492,6 @@ addEventListener('keydown', e => {
   if (e.key === '/') { e.preventDefault(); $('#inp').focus(); }
 });
 
-/* ───────── телефон: экраны и история ─────────
-   Главная → Проекты → Чаты проекта → Чат. Каждый переход — запись в history, поэтому системный жест
-   «назад» Android (и кнопка) возвращает на предыдущий экран, а не закрывает приложение.
-   Корень истории — Главная (d=0); «Главная» в нижней панели откатывает историю к нему. */
 const MS = { restoring: false, lastPop: 0 };
 const mst = () => (history.state?.m ? history.state : { m: S.view === 'dash' ? 'dash' : 'chat', d: 0 });
 function mshow(screen) {
@@ -3361,7 +3503,6 @@ function mshow(screen) {
   document.querySelectorAll('#bnav [data-nav]').forEach(b => b.setAttribute('aria-current',
     String(b.dataset.nav === (screen === 'chats' ? 'chat' : screen))));
 }
-// переход: push — вглубь (назад вернёт сюда), replace — соседняя вкладка
 function mgo(screen, how) {
   if (!isPhone()) return;
   const cur = mst();
@@ -3373,7 +3514,6 @@ function mgo(screen, how) {
   }
   mshow(screen);
 }
-// отметить экран, на который приложение перешло само (открыли чат, главную)
 function mmark(screen) {
   if (!isPhone()) return;
   if (!MS.restoring) {
@@ -3389,17 +3529,16 @@ function mhome() {
   if (d > 0) history.go(-d); else openDash();
 }
 function mback() {
-  if (Date.now() - MS.lastPop < 450) return;          // системный жест уже сработал
+  if (Date.now() - MS.lastPop < 450) return;
   if (mst().d > 0) history.back();
   else if (mst().m === 'chat') mgo('chats', 'replace');
   else mhome();
 }
 addEventListener('popstate', e => {
-  if (MS.skipNext) { MS.skipNext = false; return; }   // это мы сами откатили запись закрытого окна
+  if (MS.skipNext) { MS.skipNext = false; return; }
   MS.lastPop = Date.now();
   if (!isPhone()) return;
   if (AS.open) { asstClose(true); return; }
-  // открытое окно или меню закрывается первым — как в нативных приложениях
   const sc = [...document.querySelectorAll('.scrim')].pop();
   if (sc?._close) { sc._close(true); return; }
   const st = e.state?.m ? e.state : { m: 'dash', d: 0 };
@@ -3421,8 +3560,11 @@ function renderMScreen(screen) {
         return `<button class="mproj${p.id === S.pid ? ' cur' : ''}" data-p="${p.id}">${ptile(p, 'gl')}
           <span class="c"><b>${esc(p.name)}</b><span>${esc(p.short)}</span></span>
           <span class="n">${att ? '<span class="ask">?</span>' : ''}${run ? `<span class="run"><i></i><i></i><i></i></span>` : ''}${cs.length}</span></button>`;
-      }).join('') || '<div class="empty">Проектов пока нет. Проект — это папка на сервере.</div>'}</div>`;
+      }).join('') || '<div class="empty">Проектов пока нет. Проект — это папка на сервере.</div>'}
+      ${S.projects.length > live.length ? `<button class="march" id="m-archive">${ICONS.archive}<span>Архив проектов</span><span class="n">${S.projects.length - live.length}</span></button>` : ''}</div>`;
     box.querySelector('#m-newproject').onclick = newProjectDialog;
+    box.querySelector('#m-archive')?.addEventListener('click', archiveDialog);
+
     box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { S.pid = +b.dataset.p || b.dataset.p; save(); mgo('chats', 'push'); });
     return;
   }
@@ -3441,14 +3583,9 @@ function renderMScreen(screen) {
   list.addEventListener('click', listClick);
   box.querySelector('#m-search').oninput = e => { S.chatQuery = e.target.value; list.innerHTML = S.chatQuery.trim() ? searchHTML(S.chatQuery.trim()) : chatListHTML(p.id, true); };
 }
-// список на экране «Чаты» живой: состояния чатов меняются по SSE
 const mrefresh = () => { if (isPhone() && !$('#mscreen').hidden && !document.activeElement?.matches('#m-search')) renderMScreen(document.body.dataset.m); };
 
-/* ───────── свайпы на телефоне: от левого края — назад ───────── */
 {
-  // Системный жест «назад» Android срабатывает сам (у каждого экрана своя запись в истории).
-  // Этот свайп — для кнопочной навигации и десктопного Chrome с тачем; от двойного срабатывания
-  // защищает mback(): если popstate только что был, второй раз назад не идём.
   let sw = null;
   document.addEventListener('touchstart', e => {
     if (!isPhone() || e.touches.length !== 1 || document.body.dataset.m === 'dash') return;
@@ -3460,14 +3597,12 @@ const mrefresh = () => { if (isPhone() && !$('#mscreen').hidden && !document.act
     if (!sw || sw.fired) return;
     const t = e.touches[0];
     const dx = t.clientX - sw.x, dy = t.clientY - sw.y;
-    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; }   // это прокрутка
+    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; }
     if (dx > 72) { sw.fired = true; mback(); }
   }, { passive: true });
   document.addEventListener('touchend', () => { sw = null; }, { passive: true });
 }
 
-/* ───────── меню сообщения: долгое нажатие на телефоне, правый клик на ПК ───────── */
-// выделенный кусок текста внутри этого сообщения (если владелец что-то выделил)
 const selIn = turn => {
   const sel = window.getSelection?.();
   const t = sel && !sel.isCollapsed ? sel.toString().trim() : '';
@@ -3491,7 +3626,7 @@ function msgActions(turn, x, y) {
   ];
   if (m.role === 'user' && !isRunning(S.cid)) items.push({ text: 'Повторить запрос', run: () => send(m.text) });
   menu(anchor, items);
-  anchor.remove();                      // координаты уже посчитаны синхронно
+  anchor.remove();
 }
 {
   let lp = null;
@@ -3500,11 +3635,9 @@ function msgActions(turn, x, y) {
     const turn = e.target.closest('.turn');
     if (!turn?.dataset.mid || e.touches.length !== 1) return;
     const t = e.touches[0];
-    if (selIn(turn)) return;              // идёт выделение текста — работает системное меню «Копировать»
+    if (selIn(turn)) return;
     lp = { x: t.clientX, y: t.clientY, fired: false,
       timer: setTimeout(() => {
-        // долгое нажатие в Android само начинает выделять слово — тогда своё меню не показываем,
-        // чтобы владелец мог растянуть выделение и скопировать ровно нужный кусок
         if (selIn(turn)) { lp = null; return; }
         lp.fired = true; navigator.vibrate?.(8); msgActions(turn, t.clientX, t.clientY);
       }, 560) };
@@ -3512,25 +3645,23 @@ function msgActions(turn, x, y) {
   fw.addEventListener('touchmove', e => {
     if (!lp || lp.fired) return;
     const t = e.touches[0];
-    if (Math.hypot(t.clientX - lp.x, t.clientY - lp.y) > 12) { clearTimeout(lp.timer); lp = null; }   // это скролл
+    if (Math.hypot(t.clientX - lp.x, t.clientY - lp.y) > 12) { clearTimeout(lp.timer); lp = null; }
   }, { passive: true });
   fw.addEventListener('touchend', e => {
     if (!lp) return;
-    if (lp.fired) e.preventDefault();     // иначе синтетический click тут же закроет меню
+    if (lp.fired) e.preventDefault();
     else clearTimeout(lp.timer);
     lp = null;
   }, { passive: false });
   fw.addEventListener('contextmenu', e => {
     const turn = e.target.closest('.turn');
     if (!turn?.dataset.mid) return;
-    if (selIn(turn) || e.target.closest('a')) return;   // выделение или ссылка — родное меню браузера
+    if (selIn(turn) || e.target.closest('a')) return;
     e.preventDefault();
     msgActions(turn, e.clientX, e.clientY);
   });
 }
 
-/* ───────── доска ───────── */
-// Доска открывается мгновенно: сразу показываем прошлый снимок (или заглушку), свежие данные — следом.
 async function boardDialog() {
   const cols = [['attention', 'Ждут тебя', 'var(--warn)'], ['running', 'В работе', 'var(--accent)'], ['done', 'Готово, не смотрел', 'var(--ok)']];
   const card = c => `<div class="bcard" data-id="${c.id}">
@@ -3583,11 +3714,6 @@ async function boardDialog() {
     }
   });
 }
-/* ───────── старт ───────── */
-/* ───────── ассистент Depo: поговорить о проектах ─────────
-   Живой голос — голосовой режим ChatGPT под входом Codex: браузер говорит с ним по WebRTC, а вопросы
-   «что в проекте» голосовая модель передаёт агенту Codex (только чтение, сводка Depo в инструкциях).
-   Запасной путь — вопрос текстом или распознаванием браузера, ответ выбранного собеседника, голос устройства. */
 const AS = { open: false, scope: 'all', sid: null, pc: null, stream: null, audio: null, ac: null, raf: 0, history: [], cur: null, sr: null, muted: false, mode: null, pushed: false };
 const asstMode = () => (S.prefs?.assistant_voice ?? 'chatgpt') === 'chatgpt' && V.chatgpt && window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia ? 'chatgpt' : 'device';
 function asstScopesHTML() {
@@ -3624,14 +3750,24 @@ function asstOnText(d) {
     if (role === 'assistant') setTimeout(() => { if (AS.open && $('#asst').dataset.st === 'talk') asstState('слушаю', 'listen'); }, 600);
   }
 }
-// шар живёт голосом: громкость ответа (или микрофона) → размер и свечение
+function asstSent(sent = []) {
+  const box = $('#asst-caps');
+  for (const x of sent) {
+    const n = el('div', 'asst-l a asst-sent' + (x.ok ? '' : ' err'));
+    n.textContent = x.ok ? `ТЗ → чат «${x.title}» · ${x.project}${x.queued ? ' · после текущего хода' : ''}` : `Не отправил: ${x.error}`;
+    if (x.ok) { n.tabIndex = 0; n.title = 'Открыть чат'; n.onclick = () => { asstClose(); selectChat(x.chat_id); }; }
+    box.append(n);
+  }
+  AS.cur = null; box.scrollTop = box.scrollHeight;
+  if (sent.some(x => x.ok)) toast('Ассистент отправил ТЗ в чат');
+}
 function asstOrb(stream) {
   cancelAnimationFrame(AS.raf);
   if (!stream) return;
   try {
     AS.ac ??= new (window.AudioContext || window.webkitAudioContext)();
     const an = AS.ac.createAnalyser(); an.fftSize = 256; AS.ac.createMediaStreamSource(stream).connect(an);
-    const buf = new Uint8Array(an.frequencyBinCount), orb = $('#asst');   // громкость — всему окну: и шару, и ореолу
+    const buf = new Uint8Array(an.frequencyBinCount), orb = $('#asst');
     const tick = () => { an.getByteFrequencyData(buf); let sum = 0; for (const v of buf) sum += v;
       const k = Math.min(1, sum / buf.length / 70); orb.style.setProperty('--amp', k.toFixed(3)); AS.raf = requestAnimationFrame(tick); };
     tick();
@@ -3667,7 +3803,6 @@ function asstVoiceStop() {
   $('#asst-snd')?.remove();
   cancelAnimationFrame(AS.raf);
 }
-// запасной путь: распознавание браузера → ответ собеседника → голос устройства
 function asstSpeak(text) {
   const ready = () => asstState(AS.mode === 'device' ? (SR ? 'нажми на микрофон и говори' : 'спроси текстом') : 'слушаю', 'listen');
   if (AS.muted || !('speechSynthesis' in window)) return ready();
@@ -3677,7 +3812,7 @@ function asstSpeak(text) {
   u.onend = () => { if (AS.open) { ready(); if (AS.mode === 'device' && SR && !AS.muted) asstListen(); } };
   u.onerror = () => { if (AS.open) ready(); };
   speechSynthesis.cancel(); speechSynthesis.speak(u);
-  setTimeout(() => { if (AS.open && !speechSynthesis.speaking && $('#asst').dataset.st === 'think') ready(); }, 1500);   // голоса в браузере нет — не висим на «думаю»
+  setTimeout(() => { if (AS.open && !speechSynthesis.speaking && $('#asst').dataset.st === 'think') ready(); }, 1500);
 }
 async function asstAsk(text) {
   const q = String(text || '').trim(); if (!q) return;
@@ -3687,6 +3822,7 @@ async function asstAsk(text) {
     const d = await api('/api/assistant/ask', { method: 'POST', body: { text: q, scope: AS.scope, history: AS.history.slice(-8) } });
     if (!AS.open) return;
     asstLine('assistant', d.text, { final: true, src: `${agName('companion')} · ${d.label}` });
+    if (d.sent?.length) asstSent(d.sent);
     if (AS.mode === 'device') asstSpeak(d.text); else asstState('слушаю', 'listen');
   } catch (e) { asstState('ошибка', ''); toast(e.message, 'err', 6000); }
 }
@@ -3710,8 +3846,6 @@ async function asstStart() {
   $('#asst-who').textContent = `${agName('companion')} · голос устройства`;
   asstState(SR ? 'нажми на микрофон и говори' : 'спроси текстом', 'listen');
 }
-// Браузер даёт играть звук только в ответ на нажатие, а голос ассистента приходит через секунду-две.
-// Поэтому «разблокируем» динамик прямо в момент нажатия: тихий поток в тот же элемент, потом подменяем.
 function asstUnlockAudio() {
   try {
     AS.ac ??= new (window.AudioContext || window.webkitAudioContext)();
@@ -3723,7 +3857,6 @@ function asstUnlockAudio() {
   } catch { }
   try { if ('speechSynthesis' in window) speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(' '), { volume: 0 })); } catch { }
 }
-// если всё же не дали играть — кнопка «включить звук» (одно нажатие)
 function asstSoundBlocked() {
   if ($('#asst-snd')) return;
   const b = el('button', 'asst-snd', '🔊 Включить звук'); b.id = 'asst-snd';
@@ -3760,7 +3893,6 @@ $('#asst-scopes').addEventListener('click', e => {
   asstLine('assistant', `Переключился: ${b.textContent}.`, { final: true });
   asstStart();
 });
-// прежние действия собеседника для чата: ответ ложится в сам чат (у черновика — кнопка «Вставить в поле ввода»)
 $('#asst-chat').addEventListener('click', async e => {
   const b = e.target.closest('[data-cm]'); if (!b || !AS.scope.startsWith('c:')) return;
   const q = $('#asst-q').value.trim();
@@ -3788,7 +3920,6 @@ addEventListener('keydown', e => {
   else if (e.key === 'Escape' && AS.open) asstClose();
 });
 
-/* ───────── пин-код и отпечаток: замок экрана приложения на этом устройстве ───────── */
 const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 const PIN = {
@@ -3827,7 +3958,6 @@ const PIN = {
     } catch { return false; }
   },
 };
-// окно ввода четырёх цифр: и для замка, и для установки пин-кода
 function pinPad(title, sub, { lock = false } = {}) {
   return new Promise(resolve => {
     const ov = el('div', 'pinov' + (lock ? ' lock' : ''));
@@ -3869,7 +3999,6 @@ function pinPad(title, sub, { lock = false } = {}) {
   });
 }
 const pinPrompt = (title, sub) => pinPad(title, sub);
-// Замок: при запуске и при возврате в приложение после минуты в фоне.
 const LOCK = { hiddenAt: 0, open: false };
 async function pinLock() {
   if (!PIN.get() || LOCK.open) return;
@@ -3880,10 +4009,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') LOCK.hiddenAt = Date.now();
   else if (LOCK.hiddenAt && Date.now() - LOCK.hiddenAt > 60000) pinLock();
 });
-if (PIN.get()) pinLock();   // сразу при запуске — до того, как покажется переписка
+if (PIN.get()) pinLock();
 
-// Вышла новая версия интерфейса (service worker уже положил её в кэш). Если владелец ничего не печатает
-// и окна не открыты — тихо перезагружаемся сразу; иначе предлагаем кнопкой.
 function shellUpdated() {
   const busy = $('#inp')?.value.trim() || document.querySelector('.scrim, .pinov') || V.rec;
   if (!busy) return location.reload();
@@ -3893,7 +4020,7 @@ function shellUpdated() {
 }
 function hideSplash() {
   const sp = $('#splash'); if (!sp || sp.hidden) return;
-  const wait = Math.max(0, 1300 - (Date.now() - (window.__splashAt || 0)));   // анимация видна, но приложение не держим
+  const wait = Math.max(0, 1300 - (Date.now() - (window.__splashAt || 0)));
   setTimeout(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 520); }, wait);
 }
 (async function boot() {
@@ -3904,12 +4031,13 @@ function hideSplash() {
   } catch { if (narrow()) setSide(false); }
   try {
     const d = await api('/api/state');
-    Object.assign(S, { user: d.user, projects: d.projects, chats: d.chats, meters: d.meters, running: d.running, host: d.host, version: d.version, models: d.models, approvals: d.approvals ?? [], prefs: d.prefs ?? {}, https: d.https ?? null, queues: d.queues ?? {}, steering: d.steering ?? {}, runs: d.runs ?? {}, team: d.team ?? null });
+    Object.assign(S, { user: d.user, projects: d.projects, chats: d.chats, meters: d.meters, running: d.running, host: d.host, version: d.version, models: d.models, approvals: d.approvals ?? [], prefs: d.prefs ?? {}, https: d.https ?? null, queues: d.queues ?? {}, steering: d.steering ?? {}, runs: d.runs ?? {}, team: d.team ?? null,
+      tasks: d.tasks ?? {}, tasksAt: Object.fromEntries(Object.keys(d.tasks ?? {}).map(k => [k, Date.now()])) });
     for (const [cid, text] of Object.entries(loadDrafts())) S.chatState.set(cid, { draft: text });
     applyFeedPrefs();
   } catch (e) { hideSplash(); return void toast('Не удалось загрузить состояние: ' + e.message, 'err', 0); }
 
-  if (isPhone()) history.replaceState({ m: 'dash', d: 0 }, '');   // корень истории на телефоне — Главная
+  if (isPhone()) history.replaceState({ m: 'dash', d: 0 }, '');
   let sel = {};
   let selRaw = null;
   try { selRaw = localStorage.getItem('depo.sel'); sel = JSON.parse(selRaw || '{}'); } catch { }
@@ -3917,7 +4045,6 @@ function hideSplash() {
   S.pid = live.some(p => p.id === sel.pid) ? sel.pid : live[0]?.id ?? null;
   const want = chatOf(sel.cid);
   renderAll();
-  // Главная — точка входа: открываем её, если владелец был там или выбора ещё нет вовсе.
   if (sel.view === 'dash' || (!selRaw && live.length)) {
     if (want && want.project_id === S.pid) S.cid = want.id;
     else if (S.pid) S.cid = chatsOf(S.pid).filter(c => !c.archived)[0]?.id ?? null;
@@ -3929,25 +4056,28 @@ function hideSplash() {
   hideSplash();
   (window.requestIdleCallback || (f => setTimeout(f, 1500)))(() => settingsData().catch(() => { }), { timeout: 4000 });
   setInterval(() => {
-    if (S.cid && isRunning(S.cid) && S.view !== 'dash') renderRunState();
+    if (S.cid && isRunning(S.cid) && S.view !== 'dash') { renderRunState(); tickTasks(); }
     tickDash();
     renderRunPill();
   }, 1000);
   setInterval(() => { if (S.view === 'dash' && document.visibilityState === 'visible') loadServerStats(); }, 20000);
   autosize();
   voiceInit();
-  // PWA: регистрируем service worker (нужен для установки и уведомлений на телефоне)
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { });
   navigator.serviceWorker?.addEventListener?.('message', e => {
     if (e.data?.open) selectChat(e.data.open);
     if (e.data?.updated) shellUpdated();
   });
-  // Мобильная клавиатура меняет visual viewport, но не всегда 100vh.
   const viewport = () => document.documentElement.style.setProperty('--app-height', `${window.visualViewport?.height ?? innerHeight}px`);
   viewport();
   window.visualViewport?.addEventListener('resize', viewport);
   window.visualViewport?.addEventListener('scroll', viewport);
-  // открытие конкретного чата по ссылке из уведомления
-  const wantChat = new URLSearchParams(location.search).get('chat');
-  if (wantChat && chatOf(wantChat)) { history.replaceState(null, '', '/'); selectChat(wantChat); }
+  const typing = el => !!el && (el.isContentEditable || el.tagName === 'TEXTAREA'
+    || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|range|color|file|submit|reset|image|hidden)$/.test(el.type)));
+  const kbd = () => { document.body.dataset.kbd = typing(document.activeElement) ? '1' : '0'; };
+  document.addEventListener('focusin', kbd);
+  document.addEventListener('focusout', () => setTimeout(kbd, 0));
+  const q = new URLSearchParams(location.search);
+  const wantChat = q.get('chat');
+  if (wantChat && chatOf(wantChat)) { history.replaceState(null, '', q.get('pane') === '1' ? '/?pane=1' : '/'); selectChat(wantChat); }
 })();

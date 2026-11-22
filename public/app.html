@@ -13,17 +13,16 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<!-- заставка при запуске приложения с телефона: логотип со свечением, пока грузится состояние -->
 <div class="splash" id="splash" aria-hidden="true" hidden>
   <div class="sp-stage"><div class="sp-glow"></div><div class="sp-ring"></div>
     <img class="sp-logo" src="/icons/icon-512.png" alt="" width="176" height="176"></div>
   <div class="sp-name">Depo</div>
 </div>
-<script>
-  // показываем только при холодном запуске установленного приложения (или телефона), не на каждой перезагрузке
-  (function () {
+<script>  (function () {
     try {
-      var app = matchMedia('(display-mode: standalone)').matches || navigator.standalone || innerWidth <= 760;
+      if (new URLSearchParams(location.search).get('pane') === '1') document.documentElement.classList.add('pane');
+      var app = !document.documentElement.classList.contains('pane')
+        && (matchMedia('(display-mode: standalone)').matches || navigator.standalone || innerWidth <= 760);
       if (app && !sessionStorage.getItem('depo.splash')) {
         sessionStorage.setItem('depo.splash', '1');
         var s = document.getElementById('splash'); s.hidden = false; window.__splashAt = Date.now();
@@ -39,6 +38,8 @@
     <button class="rbtn" id="btn-newproject" aria-label="Новый проект" title="Новый проект">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     <div class="sp"></div>
+    <button class="rbtn arch" id="btn-archive" aria-label="Архив проектов" title="Архив проектов" hidden>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></svg><span class="n"></span></button>
     <div class="rsep"></div>
     <button class="rbtn" id="btn-side" aria-label="Свернуть панель" title="Свернуть панель  [">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/></svg></button>
@@ -84,7 +85,6 @@
     <div class="feed" id="feed" hidden><div class="fw" id="fw"></div></div>
     <button id="to-bottom" hidden aria-label="К последнему сообщению"></button>
 
-    <!-- телефон: проекты и чаты — отдельные экраны на всю высоту, без выезжающей панели -->
     <section class="mscreen" id="mscreen" hidden aria-live="polite"></section>
 
     <section class="dash" id="dash" hidden aria-label="Главная">
@@ -113,22 +113,16 @@
       <div class="p2-resize" id="p2-resize" aria-hidden="true"></div>
       <div class="p2head">
         <button class="p2pick" id="p2-pick">выбрать чат</button>
-        <span class="p2state" id="p2-state"></span>
+        <button class="sbtn" id="p2-tab" aria-label="Открыть в новой вкладке" title="Открыть в новой вкладке"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1h5"/></svg></button>
         <button class="sbtn" id="p2-close" aria-label="Закрыть второй чат"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
-      <div class="p2feed" id="p2-feed"></div>
-      <div class="p2atts" id="p2-atts" hidden></div>
-      <div class="p2tools"><button class="mt" id="p2-agent">—</button><button class="mt" id="p2-model">—</button><button class="mt" id="p2-effort">—</button><button class="rnd" id="p2-attach" aria-label="Прикрепить файл">📎</button><input type="file" id="p2-file" multiple hidden><button class="rnd" id="p2-mic" aria-label="Голосовой ввод">🎙</button></div>
-      <div class="p2cmp"><textarea id="p2-inp" rows="1" placeholder="Ответить…"></textarea>
-        <button class="snd" id="p2-send" aria-label="Отправить"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
+      <iframe class="p2frame" id="p2-frame" title="Второй чат" src="about:blank"></iframe>
     </aside>
     <nav class="split-tabs" id="split-tabs" hidden aria-label="Рабочие окна"><button data-p2-tab="1">Чат 1</button><button data-p2-tab="2">Чат 2</button></nav>
 
-    <!-- мини-панель: агент работает, пока ты в другом чате -->
-
     <div class="cmp" id="cmp" hidden>
-      <!-- как в Claude Code: что делает агент и сколько уже работает — прямо над полем ввода -->
-      <div class="runline" id="runline" hidden><span class="rspin" aria-hidden="true"></span><span class="rph" id="rl-phase">Работает</span><span class="rtm" id="rl-time">0 с</span></div>
+      <div class="bgt" id="bgt" hidden></div>
+      <div class="runline" id="runline" hidden><span class="rspin" aria-hidden="true"></span><span class="rph" id="rl-phase">Работает</span><span class="rtm" id="rl-time">0 с</span><button class="rstop" id="rl-stop" aria-label="Остановить агента">Стоп</button></div>
       <div class="queue" id="queue" hidden aria-label="Сообщения после текущей задачи"></div>
       <div class="cb" id="cb">
         <div class="cbody">
@@ -144,7 +138,7 @@
           <input type="file" id="file-inp" multiple hidden>
           <button class="mt agbtn" id="btn-agent" aria-label="Выбрать агента"></button>
           <button class="mt teambtn" id="btn-team" aria-pressed="false" title="Команда агентов: задача по ролям — план, визуал, тесты"><span class="tdots"><i class="d1"></i><i class="d2"></i><i class="d3"></i></span><span>Команда</span></button>
-          <button class="team-more" id="btn-team-menu" aria-label="Состав команды" title="Участники команды">⌄</button>
+          <button class="team-more" id="btn-team-menu" aria-label="Состав команды" title="Участники команды"><svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
           <button class="mt" id="btn-model">—</button>
           <button class="mt" id="btn-effort">—</button>
           <button class="mt" id="btn-perm">acceptEdits</button>
@@ -171,7 +165,6 @@
     </div>
   </main>
 
-  <!-- нижняя навигация на телефоне -->
   <nav class="bnav" id="bnav" aria-label="Разделы">
     <button data-nav="dash" aria-label="Главная"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1.5 1.5 0 0 1-1.5 1.5H15v-6h-6v6H4.5A1.5 1.5 0 0 1 3 20z"/></svg><span>Главная</span></button>
     <button data-nav="projects" aria-label="Проекты"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7a2 2 0 012-2h3l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/></svg><span>Проекты</span></button>
@@ -181,7 +174,6 @@
   </nav>
 </div>
 
-<!-- ассистент Depo: плавающая кнопка на главной (телефон) и сам разговор -->
 <button class="asstfab" id="asst-fab" aria-label="Ассистент"><span class="awave"><i></i><i></i><i></i><i></i><i></i></span></button>
 <div class="asst" id="asst" hidden role="dialog" aria-label="Ассистент Depo">
   <div class="asst-in">
@@ -196,7 +188,6 @@
   </div>
 </div>
 
-<!-- разговор с собеседником голосом -->
 <div class="liveov" id="live" hidden>
   <div class="box">
     <div class="hd"><b>Разговор с собеседником</b>

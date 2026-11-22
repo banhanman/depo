@@ -1,6 +1,3 @@
-// Прокликивает весь интерфейс и ловит ошибки в консоли браузера.
-// Запуск: DEPO_TOKEN=<кука depo_session> node scripts/ui-check.mjs
-// Нужен playwright-core (npm i -D playwright-core) и chromium; путь к браузеру — CHROMIUM_PATH.
 const { default: pkg } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 const { chromium } = pkg;
 const BASE = process.env.DEPO_URL || 'http://127.0.0.1:4620';
@@ -48,7 +45,6 @@ const steps = [
   ['микрофон', '#btn-mic'],
 ];
 let skipped = 0;
-// transform уводит панель за экран, но isVisible этого не видит — смотрим реальные координаты
 const onScreen = async el => {
   const b = await el.boundingBox().catch(() => null);
   return !!b && b.x + b.width > 2 && b.x < VP.width - 2 && b.y + b.height > 2 && b.y < VP.height - 2;
@@ -57,23 +53,23 @@ const drawerOpen = () => p.evaluate(() => innerWidth <= 760 && document.getEleme
 const setDrawer = async want => {
   if (VP.width > 760 || (await drawerOpen()) === want) return;
   if (want) await p.click('#btn-exp', { timeout: 1500 }).catch(() => { });
-  else await p.mouse.click(VP.width - 8, VP.height / 2);   // тап мимо панели закрывает её
+  else await p.mouse.click(VP.width - 8, VP.height / 2);
   await p.waitForTimeout(400);
 };
 for (const [name, sel] of steps) {
   try {
     const el = p.locator(sel).first();
-    if (!(await el.isVisible().catch(() => false))) { skipped++; continue; }     // display:none на этом вьюпорте
+    if (!(await el.isVisible().catch(() => false))) { skipped++; continue; }
     if (!(await onScreen(el))) {
-      await el.scrollIntoViewIfNeeded({ timeout: 1000 }).catch(() => { });       // может просто ниже сгиба
+      await el.scrollIntoViewIfNeeded({ timeout: 1000 }).catch(() => { });
       if (!(await onScreen(el))) {
-        await setDrawer(true);                                                   // или в выдвижной панели
+        await setDrawer(true);
         if (!(await onScreen(el))) { await setDrawer(false); skipped++; continue; }
       }
     } else if (await drawerOpen()) {
       const inDrawer = await el.evaluate(n => !!n.closest('.side,.rail')).catch(() => false);
       const modalUp = await p.locator('.scrim').first().isVisible().catch(() => false);
-      if (!inDrawer && !modalUp) await setDrawer(false);                         // цель в основной области под панелью
+      if (!inDrawer && !modalUp) await setDrawer(false);
     }
     await el.click({ timeout: 3000 }); await p.waitForTimeout(350);
   } catch (e) { errs.push(`КЛИК «${name}» (${sel}): ${e.message.split('\n')[0]}`); }
